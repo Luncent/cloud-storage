@@ -1,1 +1,10 @@
 services:
+  database:
+    image: postgres:13.22-trixie
+    env_file:
+      - .env
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - 5433:5432
+
