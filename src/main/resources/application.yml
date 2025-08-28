@@ -6,9 +6,15 @@ spring:
     url: jdbc:postgresql://localhost:5433/cloud-storage
     password: 123
     username: postgres
-  data:
-    jdbc:
-      dialect: postgresql
+  jpa:
+    properties:
+      hibernate:
+        format_sql: true
+        show_sql: true
   liquibase:
     change-log: db/changelog/changelog-master.xml
     analytics-enabled: true
+
+logging:
+  level:
+    org.springframework.security.authentication.dao: DEBUG
