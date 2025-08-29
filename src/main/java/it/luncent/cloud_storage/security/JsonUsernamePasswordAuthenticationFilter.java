@@ -1,4 +1,4 @@
-package it.luncent.cloud_storage.config.security;
+package it.luncent.cloud_storage.security;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

@@ -1,6 +1,6 @@
 package it.luncent.cloud_storage.config;
 
-import it.luncent.cloud_storage.config.security.JsonUsernamePasswordAuthenticationFilter;
+import it.luncent.cloud_storage.security.JsonUsernamePasswordAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -13,6 +13,8 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
+import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 
@@ -29,10 +31,14 @@ public class SecurityConfig {
         return http
                 .csrf(csrfConfigurer -> csrfConfigurer.disable())
                 .authorizeHttpRequests(authorize -> {
-                    authorize.requestMatchers("/api/auth/sign-in", "/api/auth/sign-up").permitAll();
+                    authorize.requestMatchers(
+                            "/auth/sign-in",
+                            "/auth/sign-up",
+                            "/free"
+                    ).permitAll();
                     authorize.anyRequest().authenticated();
                 })
-                .addFilter(new JsonUsernamePasswordAuthenticationFilter(authManager,matcher))
+                //.addFilter(new JsonUsernamePasswordAuthenticationFilter(authManager,matcher))
 /*                .logout(logoutConfigurer ->
                         //это спринг будет обрабатывать выход или я могу по этому адресу контролер для выхода сделать?
                         logoutConfigurer.logoutUrl("/api/auth/sing-out")
@@ -44,7 +50,7 @@ public class SecurityConfig {
 
     @Bean
     public AuthenticationManager authenticationManager(UserDetailsService userDetailsService,
-                                                       PasswordEncoder passwordEncoder) throws Exception {
+                                                       PasswordEncoder passwordEncoder) {
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider(userDetailsService);
         provider.setPasswordEncoder(passwordEncoder);
         return new ProviderManager(provider);
@@ -53,5 +59,10 @@ public class SecurityConfig {
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
+    }
+
+    @Bean
+    public SecurityContextRepository securityContextRepository() {
+        return new HttpSessionSecurityContextRepository();
     }
 }

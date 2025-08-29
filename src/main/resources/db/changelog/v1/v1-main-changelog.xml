@@ -19,4 +19,8 @@
         </createTable>
     </changeSet>
 
+    <changeSet id="1756459933845-1" author="dima">
+        <addAutoIncrement tableName="users" columnName="id"/>
+    </changeSet>
+
 </databaseChangeLog>

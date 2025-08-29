@@ -6,13 +6,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class TestController {
 
-    @GetMapping("/api/auth/sign-in")
-    public String signIn() {
-        return "Sign in";
+    @GetMapping("/protected")
+    public String protectedMethod() {
+        return "protected";
     }
 
-    @GetMapping("/api/auth/sign-up")
-    public String singUp() {
-        return "Sign un";
+    @GetMapping("/free")
+    public String freeMethod() {
+        return "free";
     }
 }
