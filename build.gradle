@@ -35,6 +35,9 @@ dependencies {
     //liquibase
     implementation 'org.liquibase:liquibase-core'
 
+    //minio
+    implementation 'io.minio:minio:8.5.17'
+
     //mappers
     implementation "org.mapstruct:mapstruct:${mapstructVersion}"
     annotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"

@@ -15,8 +15,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.stereotype.Service;
 
-
-//TODO check if context saves automatically by SecurityContextPersistenceFilter
 @Service
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
@@ -47,11 +45,9 @@ public class AuthServiceImpl implements AuthService {
         return authMapper.mapToResponse(authentication);
     }
 
-    //TODO check SecurityContextPersistenceFilter mb just commented line is enough
     @Override
     public void signOut(HttpServletRequest request,
                         HttpServletResponse response) {
-        //SecurityContextHolder.clearContext();
         SecurityContext context = SecurityContextHolder.getContext();
         context.setAuthentication(null);
         securityContextRepository.saveContext(context, request, response);
