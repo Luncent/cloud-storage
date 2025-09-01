@@ -1,6 +1,5 @@
 package it.luncent.cloud_storage.config;
 
-import it.luncent.cloud_storage.security.JsonUsernamePasswordAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -18,6 +17,8 @@ import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 
+
+//TODO cleanup
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
