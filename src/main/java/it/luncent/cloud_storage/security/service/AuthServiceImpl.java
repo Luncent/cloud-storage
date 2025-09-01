@@ -31,7 +31,7 @@ public class AuthServiceImpl implements AuthService {
                                          HttpServletRequest request,
                                          HttpServletResponse response) {
         Authentication authentication = authMapper.mapToAuthentication(authRequest);
-        authenticationManager.authenticate(authentication);
+        authentication = authenticationManager.authenticate(authentication);
         persistSecurityContext(authentication, request, response);
         return authMapper.mapToResponse(authentication);
     }
@@ -42,7 +42,7 @@ public class AuthServiceImpl implements AuthService {
                                          HttpServletResponse response) {
         userService.create(registrationRequest);
         Authentication authentication = authMapper.mapToAuthentication(registrationRequest);
-        authenticationManager.authenticate(authentication);
+        authentication = authenticationManager.authenticate(authentication);
         persistSecurityContext(authentication, request, response);
         return authMapper.mapToResponse(authentication);
     }

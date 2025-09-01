@@ -15,7 +15,7 @@ public interface AuthMapper {
         return new UsernamePasswordAuthenticationToken(request.username(), request.password());
     }
 
-    @Mapping(target = "username", expression = "java((String)authentication.getPrincipal())")
+    @Mapping(target = "username", expression = "java(authentication.getName())")
     AuthenticationResponse mapToResponse(Authentication authentication);
 
     default UsernamePasswordAuthenticationToken mapToAuthentication(RegistrationRequest request){
