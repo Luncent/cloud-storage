@@ -16,6 +16,13 @@ import java.security.NoSuchAlgorithmException;
 
 public class MinioTests {
 
+
+    @Test
+    void getResourceFolderDoesNotContainSizeField(){
+
+    }
+
+
     @Test
     public void testMinio() throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
         MinioClient minioClient = MinioClient.builder()
