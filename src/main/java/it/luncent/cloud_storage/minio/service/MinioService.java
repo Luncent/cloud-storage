@@ -1,19 +1,22 @@
 package it.luncent.cloud_storage.minio.service;
 
-import it.luncent.cloud_storage.minio.model.request.ReplaceRenameRequest;
+import it.luncent.cloud_storage.minio.model.request.MoveRenameRequest;
 import it.luncent.cloud_storage.minio.model.request.UploadRequest;
 import it.luncent.cloud_storage.minio.model.response.ResourceMetadataResponse;
 
+import java.io.InputStream;
 import java.util.List;
 
 //TODO add upload resource method
 public interface MinioService {
 
+    void createBucket(String bucketName);
+
     ResourceMetadataResponse getResourceMetadata(String path);
 
     void deleteResource(String path);
 
-    ResourceMetadataResponse replaceOrRenameResource(ReplaceRenameRequest request);
+    ResourceMetadataResponse moveOrRenameResource(MoveRenameRequest request);
 
     List<ResourceMetadataResponse> searchResource(String query);
 
@@ -21,5 +24,5 @@ public interface MinioService {
 
     List<ResourceMetadataResponse> getDirectoryContents(String path);
 
-
+    InputStream downloadResource(String path);
 }
