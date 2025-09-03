@@ -7,10 +7,9 @@ import it.luncent.cloud_storage.minio.model.response.ResourceMetadataResponse;
 import java.io.InputStream;
 import java.util.List;
 
-//TODO add upload resource method
 public interface MinioService {
 
-    void createBucket(String bucketName);
+    void createBucketForUsersData();
 
     ResourceMetadataResponse getResourceMetadata(String path);
 

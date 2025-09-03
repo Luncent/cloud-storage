@@ -18,6 +18,11 @@ spring:
     database:
       replace: none
 
+minio:
+  endpoint: "http://localhost:9000"
+  username: admin
+  password: 12345678
+
 logging:
   level:
     org.springframework.security.authentication.dao: DEBUG

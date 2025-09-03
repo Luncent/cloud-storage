@@ -1,12 +1,12 @@
 package it.luncent.cloud_storage.minio;
 
-import io.minio.BucketExistsArgs;
 import io.minio.CopyObjectArgs;
 import io.minio.CopySource;
 import io.minio.ListObjectsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.RemoveObjectArgs;
+import io.minio.RemoveObjectsArgs;
 import io.minio.Result;
 import io.minio.StatObjectArgs;
 import io.minio.StatObjectResponse;
@@ -16,9 +16,16 @@ import io.minio.errors.InternalException;
 import io.minio.errors.InvalidResponseException;
 import io.minio.errors.ServerException;
 import io.minio.errors.XmlParserException;
+import io.minio.messages.DeleteError;
+import io.minio.messages.DeleteObject;
 import io.minio.messages.Item;
-import org.junit.jupiter.api.BeforeAll;
+import it.luncent.cloud_storage.common.MinioConfig;
+import it.luncent.cloud_storage.minio.model.response.ResourceMetadataResponse;
+import it.luncent.cloud_storage.minio.service.MinioService;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
+import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 
 import java.io.IOException;
 import java.security.InvalidKeyException;
@@ -26,17 +33,33 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+
+@SpringJUnitConfig(
+        classes = {MinioConfig.class},
+        initializers = ConfigDataApplicationContextInitializer.class
+)
 public class MinioTests {
 
-    static MinioClient minioClient;
+    @Autowired
+    private MinioClient minioClient;
+    @Autowired
+    private MinioService minioService;
 
-    @BeforeAll
-    static void setUp() {
-        minioClient = MinioClient.builder()
-                .endpoint("http://localhost:9000")
-                .credentials("admin", "12345678")
-                .build();
+    @Test
+    void testBucketCreation(){
+        minioService.createBucketForUsersData();
     }
+
+    @Test
+    void testB2ucketCreation(){
+        String testStr = "afa/sf/";
+        int length = testStr.length();
+        int prelastSlashIndex = testStr.lastIndexOf('/', length-2);
+        String folderName = testStr.substring(prelastSlashIndex+1);
+        System.out.println(folderName);
+    }
+
 
     @Test
     public void createBucket() throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
@@ -46,7 +69,11 @@ public class MinioTests {
     }
 
     @Test
-    void getResourceMetadata() throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
+    void fileResourceMetadataHasSizeField() throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
+        ResourceMetadataResponse response = minioService.getResourceMetadata("second");
+
+        assertThat(response.size()).isNotNull();
+
         StatObjectResponse objectStat = minioClient.statObject(
                 StatObjectArgs.builder()
                         .bucket("test")
@@ -94,7 +121,7 @@ public class MinioTests {
     }
 
     @Test
-    void renameFile() throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
+    void renameOrMoveFile() throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
         try {
             minioClient.copyObject(
                     CopyObjectArgs.builder()
@@ -149,55 +176,75 @@ public class MinioTests {
     }
 
 
-    private void moveDir(String bucket, String fromFolder, String toFolder, String prefix) throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
+    private void moveDir(String fromFolder, String toFolder, String prefix) throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
         System.out.println("-------------------DIR-----------------");
 
-        Iterable<Result<Item>> d = minioClient.listObjects(
+        Iterable<Result<Item>> results = minioClient.listObjects(
                 ListObjectsArgs.builder()
-                        .bucket(bucket)
+                        .bucket("newbucket")
                         .prefix(prefix)
                         .build()
         );
 
         List<Item> directories = new ArrayList<>();
+        List<DeleteObject> deleteObjects = new ArrayList<>();
 
-        for (Result<Item> r : d) {
-            Item object = r.get();
+        for (Result<Item> result : results) {
+            Item object = result.get();
             if(object.isDir()){
                 directories.add(object);
             }
             else{
                 String fullFileName = object.objectName();
                 int fullPathLength = fullFileName.length();
-                String filename = fullFileName.substring(fromFolder.length(), fullPathLength);
+                String relativeFilename = fullFileName.substring(fromFolder.length(), fullPathLength);
                 minioClient.copyObject(
                         CopyObjectArgs.builder()
-                                .bucket(bucket)
-                                .object(toFolder + filename)
+                                .bucket("newbucket")
+                                .object(toFolder + relativeFilename)
                                 .source(
                                         CopySource.builder()
-                                                .bucket(bucket)
+                                                .bucket("newbucket")
                                                 .object(fullFileName)
                                                 .build()
                                 )
                                 .build()
-                )
+                );
+                deleteObjects.add(new DeleteObject(fullFileName));
 
-                System.out.println(object.objectName());
+                //System.out.println(relativeFilename);
             }
         }
 
+        Iterable<Result<DeleteError>> errorsResults = minioClient.removeObjects(
+                RemoveObjectsArgs.builder()
+                        .bucket("newbucket")
+                        .objects(deleteObjects)
+                        .build()
+        );
+
+        for(Result<DeleteError> error : errorsResults){
+            DeleteError deleteError = error.get();
+            System.out.println(deleteError.message());
+        }
+
         for(Item directory : directories){
-            moveDir(bucket, directory.objectName());
+            moveDir(fromFolder,toFolder, directory.objectName());
         }
 
     }
 
     @Test
-    void renameDirectory() throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
+    void deleteObjects(){
+        List<DeleteObject> deleteObjects = new ArrayList<>();
+        deleteObjects.add(new DeleteObject("newbucket" ,null));
+    }
+
+    @Test
+    void renameOrMoveDirectory() throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
         try {
 
-            printFolderContent("newbucket", "nested1/");
+            moveDir("folder3/newFolder", "folder4/", "folder3/newFolder");
 
             /*minioClient.copyObject(
                     CopyObjectArgs.builder()
