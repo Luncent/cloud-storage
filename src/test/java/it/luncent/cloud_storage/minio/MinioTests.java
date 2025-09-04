@@ -1,15 +1,6 @@
 package it.luncent.cloud_storage.minio;
 
-import io.minio.CopyObjectArgs;
-import io.minio.CopySource;
-import io.minio.ListObjectsArgs;
-import io.minio.MakeBucketArgs;
-import io.minio.MinioClient;
-import io.minio.RemoveObjectArgs;
-import io.minio.RemoveObjectsArgs;
-import io.minio.Result;
-import io.minio.StatObjectArgs;
-import io.minio.StatObjectResponse;
+import io.minio.*;
 import io.minio.errors.ErrorResponseException;
 import io.minio.errors.InsufficientDataException;
 import io.minio.errors.InternalException;
@@ -20,14 +11,23 @@ import io.minio.messages.DeleteError;
 import io.minio.messages.DeleteObject;
 import io.minio.messages.Item;
 import it.luncent.cloud_storage.common.MinioConfig;
+import it.luncent.cloud_storage.minio.model.request.UploadRequest;
 import it.luncent.cloud_storage.minio.model.response.ResourceMetadataResponse;
 import it.luncent.cloud_storage.minio.service.MinioService;
+import org.apache.tika.Tika;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -41,24 +41,108 @@ import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 )
 public class MinioTests {
 
+    private static final String BUCKET_NAME = "user-files";
+
     @Autowired
     private MinioClient minioClient;
     @Autowired
     private MinioService minioService;
+    @Autowired
+    private Tika tika;
 
     @Test
     void testBucketCreation(){
         minioService.createBucketForUsersData();
     }
 
-    @Test
-    void testB2ucketCreation(){
-        String testStr = "afa/sf/";
-        int length = testStr.length();
-        int prelastSlashIndex = testStr.lastIndexOf('/', length-2);
-        String folderName = testStr.substring(prelastSlashIndex+1);
-        System.out.println(folderName);
+    //first call prefix is uploading folderName
+    void uploadFolderResourceMain(String folderForSaving, String prefix, Path folder){
+        try(DirectoryStream<Path> directoryStream = Files.newDirectoryStream(folder)){
+            for(Path path : directoryStream){
+                if(Files.isDirectory(path)){
+                    String newPrefix = prefix + path.getFileName().toString()+"/";
+                    uploadFolderResourceMain(folderForSaving, newPrefix, path);
+                    continue;
+                }
+                uploadFile(path.toFile(), folderForSaving, prefix);
+            }
+        }catch (Exception ex){
+            ex.printStackTrace();
+        }
     }
+
+    void uploadFile(File file, String targetFolderPath, String prefix) throws Exception {
+        String contentType = tika.detect(file);
+        String fileName = file.getName();
+        try (FileInputStream fis = new FileInputStream(file)){
+            minioClient.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(BUCKET_NAME)
+                            .contentType(contentType)
+                            .object(targetFolderPath + prefix + fileName)
+                            .stream(fis, file.length(), -1)
+                            .build()
+            );
+        }
+    }
+
+    @Test
+    void uploadFolderResource(){
+        Path folderPath = Path.of("src/test/resources/minio_test_data/folder1/");
+        String folderToUpload = "user-1-files/diplom/";
+        uploadFolderResourceMain(folderToUpload, "folder1/", folderPath);
+    }
+
+
+
+    
+
+    @Test
+    void uploadFileResource(){
+        File file = new File("src/test/resources/minio_test_data/folder1/file1.sql");
+        try(FileInputStream fis = new FileInputStream(file)){
+            String contentType = tika.detect(file);
+            String folderToUpload = "user-1-files/diplom/";
+            String filename = file.getName();
+            minioClient.putObject(
+                    PutObjectArgs.builder()
+                            .bucket("user-files")
+                            .object(folderToUpload+filename)
+                            .contentType(contentType)
+                            .stream(fis, file.length(), -1)
+                            .build()
+            );
+        }catch (Exception ex){
+            ex.printStackTrace();
+        }
+    }
+
+    @Test
+    void uploadFile(){
+        MultipartFile multipartFile = new MockMultipartFile("file", "test.txt", "text/plain", "Hello World".getBytes());
+
+        UploadRequest uploadRequest = new UploadRequest(null, null);
+        List<ResourceMetadataResponse> uploadedResources = minioService.upload(uploadRequest);
+        for(ResourceMetadataResponse resource : uploadedResources){
+            assertThat(minioService.getResourceMetadata(resource.path())).isNotNull();
+        }
+    }
+
+    @Test
+    void testGetFileResourceData(){
+        ResourceMetadataResponse metadataResponse = minioService.getResourceMetadata("diplom/антиплагиатd.pdf");
+        assertThat(metadataResponse.size()).isNotNull();
+        assertThat(metadataResponse.path().endsWith("/")).isFalse();
+    }
+
+    @Test
+    void testGetFolderResourceData(){
+        ResourceMetadataResponse metadataResponse = minioService.getResourceMetadata("diplom/");
+        assertThat(metadataResponse.size()).isNull();
+        assertThat(metadataResponse.path().endsWith("/")).isTrue();
+    }
+
+    //------------------------------------------------------
 
 
     @Test

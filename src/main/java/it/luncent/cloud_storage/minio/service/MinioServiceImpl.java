@@ -5,7 +5,9 @@ import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.StatObjectArgs;
 import io.minio.StatObjectResponse;
+import io.minio.errors.ErrorResponseException;
 import it.luncent.cloud_storage.minio.exception.MinioException;
+import it.luncent.cloud_storage.minio.exception.ResourceNotFoundException;
 import it.luncent.cloud_storage.minio.mapper.MinioMapper;
 import it.luncent.cloud_storage.minio.model.ResourcePath;
 import it.luncent.cloud_storage.minio.model.request.MoveRenameRequest;
@@ -58,6 +60,7 @@ public class MinioServiceImpl implements MinioService {
         }
     }
 
+    //TODO make method for exception handling + strategy for converting minio exceptions to custom ones
     @Override
     public ResourceMetadataResponse getResourceMetadata(String relativePath) {
         ResourcePath resourcePath = getRealResourcePath(relativePath);
@@ -72,11 +75,17 @@ public class MinioServiceImpl implements MinioService {
                             .build()
             );
             return minioMapper.mapToFileResponse(resourcePath, objectMetadata);
-        }catch (Exception ex){
+        }catch (ErrorResponseException ex){
+            if(ex.errorResponse().code().equals("NoSuchKey")){
+                throw new ResourceNotFoundException(ex.getMessage(), ex);
+            }
+            throw new MinioException(ex.getMessage(), ex);
+        }
+        catch (Exception ex){
             throw new MinioException(ex.getMessage(), ex);
         }
     }
-
+    //TODO get userId from SecurityContext
     private ResourcePath getRealResourcePath(String relativePath) {
         String realPath = String.format(USER_RESOURCE_PATH_TEMPLATE, 1, relativePath);
         return new ResourcePath(relativePath, realPath);
