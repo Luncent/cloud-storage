@@ -3,8 +3,11 @@ package it.luncent.cloud_storage.minio.service;
 import io.minio.BucketExistsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
+import io.minio.StatObjectArgs;
+import io.minio.StatObjectResponse;
 import it.luncent.cloud_storage.minio.exception.MinioException;
 import it.luncent.cloud_storage.minio.mapper.MinioMapper;
+import it.luncent.cloud_storage.minio.model.ResourcePath;
 import it.luncent.cloud_storage.minio.model.request.MoveRenameRequest;
 import it.luncent.cloud_storage.minio.model.request.UploadRequest;
 import it.luncent.cloud_storage.minio.model.response.ResourceMetadataResponse;
@@ -19,6 +22,7 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class MinioServiceImpl implements MinioService {
+    private static final String USER_RESOURCE_PATH_TEMPLATE = "user-%d-files/%s";
     private static final String USERS_DATA_BUCKET = "user-files";
 
     private final MinioClient minioClient;
@@ -55,13 +59,27 @@ public class MinioServiceImpl implements MinioService {
     }
 
     @Override
-    public ResourceMetadataResponse getResourceMetadata(String path) {
-        ResourceMetadataResponse response = null;
-        if(isFolder(path)){
-            return minioMapper.mapToFolderResponse(path);
+    public ResourceMetadataResponse getResourceMetadata(String relativePath) {
+        ResourcePath resourcePath = getRealResourcePath(relativePath);
+        if(isFolder(relativePath)){
+            return minioMapper.mapToFolderResponse(resourcePath);
         }
+        try {
+            StatObjectResponse objectMetadata = minioClient.statObject(
+                    StatObjectArgs.builder()
+                            .bucket(USERS_DATA_BUCKET)
+                            .object(resourcePath.real())
+                            .build()
+            );
+            return minioMapper.mapToFileResponse(resourcePath, objectMetadata);
+        }catch (Exception ex){
+            throw new MinioException(ex.getMessage(), ex);
+        }
+    }
 
-        return null;
+    private ResourcePath getRealResourcePath(String relativePath) {
+        String realPath = String.format(USER_RESOURCE_PATH_TEMPLATE, 1, relativePath);
+        return new ResourcePath(relativePath, realPath);
     }
 
     private boolean isFolder(String path) {
