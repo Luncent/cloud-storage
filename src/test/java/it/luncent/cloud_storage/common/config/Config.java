@@ -1,4 +1,4 @@
-package it.luncent.cloud_storage.common;
+package it.luncent.cloud_storage.common.config;
 
 import it.luncent.cloud_storage.user.mapper.UserMapperImpl;
 import it.luncent.cloud_storage.user.service.UserServiceImpl;

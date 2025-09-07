@@ -9,17 +9,19 @@ import java.util.List;
 
 public interface MinioService {
 
+    //implemented
     void createBucketForUsersData();
 
+    //implemented but need extra work
     ResourceMetadataResponse getResourceMetadata(String path);
+
+    List<ResourceMetadataResponse> upload(UploadRequest request);
 
     void deleteResource(String path);
 
     ResourceMetadataResponse moveOrRenameResource(MoveRenameRequest request);
 
     List<ResourceMetadataResponse> searchResource(String query);
-
-    List<ResourceMetadataResponse> upload(UploadRequest request);
 
     List<ResourceMetadataResponse> getDirectoryContents(String path);
 

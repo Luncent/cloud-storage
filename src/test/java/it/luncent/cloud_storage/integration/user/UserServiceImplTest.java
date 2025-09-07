@@ -1,7 +1,7 @@
 package it.luncent.cloud_storage.integration.user;
 
-import it.luncent.cloud_storage.common.IT;
-import it.luncent.cloud_storage.common.TestContainerBase;
+import it.luncent.cloud_storage.common.config.IT;
+import it.luncent.cloud_storage.common.config.TestContainerBase;
 import it.luncent.cloud_storage.security.exception.UsernameExistsException;
 import it.luncent.cloud_storage.security.model.request.RegistrationRequest;
 import it.luncent.cloud_storage.user.service.UserServiceImpl;

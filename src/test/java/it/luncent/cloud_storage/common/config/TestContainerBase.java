@@ -1,4 +1,4 @@
-package it.luncent.cloud_storage.common;
+package it.luncent.cloud_storage.common.config;
 
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
