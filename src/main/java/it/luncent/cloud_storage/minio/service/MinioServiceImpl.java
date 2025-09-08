@@ -15,6 +15,7 @@ import org.apache.tika.Tika;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.BufferedInputStream;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -89,7 +90,8 @@ public class MinioServiceImpl implements MinioService {
             return minioMapper.mapToFileResponse(resourcePath, objectMetadata);
         } catch (ErrorResponseException ex) {
             if (ex.errorResponse().code().equals("NoSuchKey")) {
-                throw new ResourceNotFoundException(ex.getMessage(), ex);
+                //TODO not found should be
+                throw new MinioException(ex.getMessage(), ex);
             }
             throw new MinioException(ex.getMessage(), ex);
         } catch (Exception ex) {
@@ -170,20 +172,21 @@ public class MinioServiceImpl implements MinioService {
                     continue;
                 }
                 //TODO check mark feature, or does it detect type without bad consequences? (it reads from is so later i get 0. Need to read it all in byte array or find out workaround)
-                //String contentType = tika.detect(zis);
-                String contentType = "text/plain";
+                BufferedInputStream bis = new BufferedInputStream(zis);
+                String contentType = tika.detect(bis);
+
 
                 //TODO get content type, size and refactoring
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                /*ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 byte[] buffer = new byte[1024];
                 int len;
                 while ((len = zis.read(buffer)) > 0) {
                     baos.write(buffer, 0, len);
                 }
-                byte[] fileData = baos.toByteArray();
+                byte[] fileData = baos.toByteArray();*/
 
+                uploadedResourcesNames.add(uploadFile(bis, entry.getName(), contentType, request.targetDirectory()));
                 zis.closeEntry();
-                uploadedResourcesNames.add(uploadFile(new ByteArrayInputStream(fileData), entry.getName(), contentType, request.targetDirectory()));
             }
         } catch (Exception e) {
             log.debug(e.getMessage(), e);
