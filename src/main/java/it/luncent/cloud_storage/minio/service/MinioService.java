@@ -1,29 +1,22 @@
 package it.luncent.cloud_storage.minio.service;
 
-import it.luncent.cloud_storage.minio.model.request.MoveRenameRequest;
-import it.luncent.cloud_storage.minio.model.request.UploadRequest;
-import it.luncent.cloud_storage.minio.model.response.ResourceMetadataResponse;
+import io.minio.StatObjectResponse;
 
 import java.io.InputStream;
-import java.util.List;
 
 public interface MinioService {
 
-    //implemented
-    void createBucketForUsersData();
+    void createBucket(String bucketName);
 
-    //implemented but need extra work
-    ResourceMetadataResponse getResourceMetadata(String path);
+    boolean bucketExists(String bucketName);
 
-    List<ResourceMetadataResponse> upload(UploadRequest request);
+    StatObjectResponse getObject(String bucketName, String objectName);
 
-    void deleteResource(String path);
+    void uploadFile(String bucketName, String fileName, InputStream inputStream, String contentType);
 
-    ResourceMetadataResponse moveOrRenameResource(MoveRenameRequest request);
+    void deleteFile(String bucketName, String fileName);
 
-    List<ResourceMetadataResponse> searchResource(String query);
+    InputStream downloadFile(String bucketName, String fileName);
 
-    List<ResourceMetadataResponse> getDirectoryContents(String path);
-
-    InputStream downloadResource(String path);
+    void createEmptyDirectory(String bucketName, String folderName);
 }

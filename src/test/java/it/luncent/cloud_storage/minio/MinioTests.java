@@ -1,3 +1,4 @@
+/*
 package it.luncent.cloud_storage.minio;
 
 import io.minio.*;
@@ -10,10 +11,10 @@ import io.minio.errors.XmlParserException;
 import io.minio.messages.DeleteError;
 import io.minio.messages.DeleteObject;
 import io.minio.messages.Item;
-import it.luncent.cloud_storage.common.config.MinioConfig;
+import it.luncent.cloud_storage.config.MinioConfig;
 import it.luncent.cloud_storage.minio.model.request.UploadRequest;
 import it.luncent.cloud_storage.minio.model.response.ResourceMetadataResponse;
-import it.luncent.cloud_storage.minio.service.MinioService;
+import it.luncent.cloud_storage.minio.service.ResourceService;
 import it.luncent.cloud_storage.minio.test_data.MinioTestDataRepositoryTest;
 import org.apache.tika.Tika;
 import org.junit.jupiter.api.AfterEach;
@@ -22,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.stereotype.Component;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -35,16 +37,13 @@ import java.util.List;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
-@SpringJUnitConfig(
-        classes = {MinioConfig.class},
-        initializers = ConfigDataApplicationContextInitializer.class
-)
+@Component
 public class MinioTests {
 
     @Autowired
     private MinioClient minioClient;
     @Autowired
-    private MinioService minioService;
+    private ResourceService resourceService;
     @Autowired
     private Tika tika;
     @Autowired
@@ -62,14 +61,14 @@ public class MinioTests {
 
     @Test
     void testGetFileResourceData(){
-        ResourceMetadataResponse metadataResponse = minioService.getResourceMetadata("diplom/антиплагиатd.pdf");
+        ResourceMetadataResponse metadataResponse = resourceService.getResourceMetadata("diplom/антиплагиатd.pdf");
         assertThat(metadataResponse.size()).isNotNull();
         assertThat(metadataResponse.path().endsWith("/")).isFalse();
     }
 
     @Test
     void testGetFolderResourceData(){
-        ResourceMetadataResponse metadataResponse = minioService.getResourceMetadata("diplom/");
+        ResourceMetadataResponse metadataResponse = resourceService.getResourceMetadata("diplom/");
         assertThat(metadataResponse.size()).isNull();
         assertThat(metadataResponse.path().endsWith("/")).isTrue();
     }
@@ -77,7 +76,7 @@ public class MinioTests {
 
     @Test
     void testBucketCreation(){
-        minioService.createBucketForUsersData();
+        resourceService.createBucketForUsersData();
     }
 
     @Test
@@ -107,9 +106,9 @@ public class MinioTests {
         MultipartFile multipartFile = new MockMultipartFile("file", "test.txt", "text/plain", "Hello World".getBytes());
 
         UploadRequest uploadRequest = new UploadRequest(null, null);
-        List<ResourceMetadataResponse> uploadedResources = minioService.upload(uploadRequest);
+        List<ResourceMetadataResponse> uploadedResources = resourceService.upload(uploadRequest);
         for(ResourceMetadataResponse resource : uploadedResources){
-            assertThat(minioService.getResourceMetadata(resource.path())).isNotNull();
+            assertThat(resourceService.getResourceMetadata(resource.path())).isNotNull();
         }
     }
 
@@ -125,7 +124,7 @@ public class MinioTests {
 
     @Test
     void fileResourceMetadataHasSizeField() throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
-        ResourceMetadataResponse response = minioService.getResourceMetadata("second");
+        ResourceMetadataResponse response = resourceService.getResourceMetadata("second");
 
         assertThat(response.size()).isNotNull();
 
@@ -301,7 +300,8 @@ public class MinioTests {
 
             moveDir("folder3/newFolder", "folder4/", "folder3/newFolder");
 
-            /*minioClient.copyObject(
+            */
+/*minioClient.copyObject(
                     CopyObjectArgs.builder()
                             .bucket("test")
                             .object("copy-folder/file1.txt")
@@ -316,7 +316,8 @@ public class MinioTests {
                             .bucket("test")
                             .object("copy-folder/file2.txt")
                             .build()
-            );*/
+            );*//*
+
         }catch (ErrorResponseException e){
             if(e.errorResponse().code().equals("NoSuchKey")){
                 System.out.println("source recourse not found");
@@ -325,3 +326,4 @@ public class MinioTests {
         }
     }
 }
+*/

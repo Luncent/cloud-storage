@@ -1,4 +1,4 @@
-package it.luncent.cloud_storage.common.config;
+package it.luncent.cloud_storage.config;
 
 import it.luncent.cloud_storage.user.mapper.UserMapperImpl;
 import it.luncent.cloud_storage.user.service.UserServiceImpl;
@@ -12,5 +12,5 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
         UserMapperImpl.class,
         BCryptPasswordEncoder.class
 })
-public class Config {
+public class UserConfig {
 }

@@ -11,5 +11,6 @@ import org.mapstruct.NullValueMappingStrategy;
 @Mapper(componentModel = "spring")
 public interface UserMapper {
     UserResponse mapToResponse(User user);
+    @Mapping(target = "id", ignore = true)
     User mapToEntity(RegistrationRequest registrationRequest);
 }

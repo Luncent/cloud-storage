@@ -1,4 +1,4 @@
-package it.luncent.cloud_storage.common.constants;
+package it.luncent.cloud_storage.minio.test_data;
 
 public class MinioConstants {
     public static final String BUCKET_NAME = "user-files";

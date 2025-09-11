@@ -1,4 +1,4 @@
-package it.luncent.cloud_storage.integration.user;
+package it.luncent.cloud_storage.user.test_data;
 
 import it.luncent.cloud_storage.security.model.request.RegistrationRequest;
 import org.instancio.Instancio;
