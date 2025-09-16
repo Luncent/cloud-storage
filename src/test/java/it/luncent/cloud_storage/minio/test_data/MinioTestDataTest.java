@@ -1,43 +1,39 @@
-/*
+
 package it.luncent.cloud_storage.minio.test_data;
 
-import io.minio.MinioClient;
-import io.minio.PutObjectArgs;
-import io.minio.RemoveObjectArgs;
-import it.luncent.cloud_storage.config.MinioConfig;
+import it.luncent.cloud_storage.config.MinioTestConfig;
 import it.luncent.cloud_storage.minio.model.request.UploadRequest;
 import it.luncent.cloud_storage.minio.service.ResourceService;
-import org.apache.tika.Tika;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.stereotype.Component;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.*;
-import java.nio.file.DirectoryStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-import static java.nio.file.Files.isDirectory;
+import static it.luncent.cloud_storage.minio.test_data.MinioConstants.ARCHIVE_PATH;
+import static it.luncent.cloud_storage.minio.test_data.MinioConstants.DIRECTORY_TO_ARCHIVE;
+import static it.luncent.cloud_storage.minio.test_data.MinioConstants.TEST_TARGET_DIRECTORY;
 
-public class MinioTestDataRepositoryTest {
+@SpringJUnitConfig(
+        classes = {MinioTestConfig.class},
+        initializers = ConfigDataApplicationContextInitializer.class
+)
+public class MinioTestDataTest {
 
-    @Autowired
-    private MinioClient minioClient;
-    @Autowired
-    private Tika tika;
     @Autowired
     private ResourceService resourceService;
 
-    private static final String MINIO_TEST_DATA_DIRECTORY = "src/test/resources/minio_test_data/folder1/";
-    private static final String ARCHIVE_PATH = "src/test/resources/minio_test_data/folder1.zip";
-
-    //first call prefix is uploading folderName
+    /*//first call prefix is uploading folderName
     public void uploadDirectoryMain(String targetDirectory, String prefix, Path folder) {
         try (DirectoryStream<Path> directoryResources = Files.newDirectoryStream(folder)) {
             for (Path resource : directoryResources) {
@@ -91,16 +87,21 @@ public class MinioTestDataRepositoryTest {
         MultipartFile multipartFile = new MockMultipartFile("folder1/", new FileInputStream(ARCHIVE_PATH));
         UploadRequest uploadRequest = new UploadRequest(TEST_TARGET_DIRECTORY, multipartFile);
         resourceService.upload(uploadRequest);
+    }*/
+
+    @Test
+    public void createUploadRequest() throws IOException {
+        MultipartFile multipartFile = new MockMultipartFile("folder1/", new FileInputStream(ARCHIVE_PATH));
+        UploadRequest uploadRequest = new UploadRequest(TEST_TARGET_DIRECTORY, multipartFile);
+        resourceService.upload(uploadRequest);
+        //return uploadRequest;
     }
 
     @Test
     public void createZipArchive() {
-        //MINIO_TEST_DATA_DIRECTORY
         try (ZipOutputStream zipOutputStream = new ZipOutputStream(new FileOutputStream(ARCHIVE_PATH))) {
-
-            File targetDirectory = new File(MINIO_TEST_DATA_DIRECTORY);
-            addResourceToArchive(targetDirectory, targetDirectory.getName(), zipOutputStream);
-
+            File directoryToArchive = new File(DIRECTORY_TO_ARCHIVE);
+            addResourceToArchive(directoryToArchive, directoryToArchive.getName(), zipOutputStream);
         } catch (Exception ex) {
             ex.printStackTrace();
         }
@@ -119,14 +120,18 @@ public class MinioTestDataRepositoryTest {
         }
         ZipEntry fileEntry = new ZipEntry(resourceName);
         zipOutputStream.putNextEntry(fileEntry);
+        writeFileToArchive(resource, zipOutputStream);
+        zipOutputStream.closeEntry();
+    }
+
+    private void writeFileToArchive(File resource, ZipOutputStream zipOutputStream) throws IOException {
         try (BufferedInputStream bis = new BufferedInputStream(new FileInputStream(resource))) {
             byte[] buffer = new byte[1024];
             int read;
             while ((read = bis.read(buffer)) != -1) {
                 zipOutputStream.write(buffer, 0, read);
             }
-            zipOutputStream.closeEntry();
         }
     }
 }
-*/
+

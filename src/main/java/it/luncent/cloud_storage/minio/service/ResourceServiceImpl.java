@@ -1,25 +1,27 @@
-/*
 package it.luncent.cloud_storage.minio.service;
 
 import io.minio.*;
 import io.minio.errors.*;
 import it.luncent.cloud_storage.minio.exception.MinioException;
 import it.luncent.cloud_storage.minio.mapper.MinioMapper;
-import it.luncent.cloud_storage.minio.model.ResourcePath;
+import it.luncent.cloud_storage.minio.model.common.ResourcePath;
+import it.luncent.cloud_storage.minio.model.common.UploadingFile;
 import it.luncent.cloud_storage.minio.model.request.MoveRenameRequest;
 import it.luncent.cloud_storage.minio.model.request.UploadRequest;
 import it.luncent.cloud_storage.minio.model.response.ResourceMetadataResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tika.Tika;
+import org.apache.tika.io.TikaInputStream;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedInputStream;
-import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
@@ -31,6 +33,8 @@ import java.util.zip.ZipInputStream;
 public class ResourceServiceImpl implements ResourceService {
     private static final String USER_RESOURCE_PATH_TEMPLATE = "user-%d-files/%s";
     private static final String USERS_DATA_BUCKET = "user-files";
+    private static final Long FILE_SIZE_NOT_AVAILABLE = -1L;
+    private static final Long FILE_SIZE_AVAILABLE = -1L;
 
     private static final Long MB = 1024L * 1024L;
 
@@ -106,10 +110,10 @@ public class ResourceServiceImpl implements ResourceService {
             if (isArchive(request)) {
                 uploadedResourcesNames.addAll(uploadArchive(request));
             } else {
-                String fileName = request.file().getName();
-                String contentType = request.file().getContentType();
-                uploadedResourcesNames.add(uploadFile(request.file().getInputStream(), fileName, contentType, request.targetDirectory()));
+                UploadingFile uploadingFile = UploadingFile.withKnownFileSize(request);
+                uploadedResourcesNames.add(uploadFile(uploadingFile));
             }
+            uploadedResourcesNames.forEach(System.out::println);
         } catch (Exception e) {
             log.debug(e.getMessage(), e);
             //TODO think about exception
@@ -119,20 +123,31 @@ public class ResourceServiceImpl implements ResourceService {
         return List.of();
     }
 
-    */
-/*private String uploadFile(InputStream inputStream, String fileName, String contentType, String targetDirectory) throws Exception {
-        ResourcePath resourcePath = getRealResourcePath(targetDirectory + fileName);
+    private String uploadFile(UploadingFile uploadingFile) throws Exception {
+        String relativePath = uploadingFile.targetDirectory() + uploadingFile.fileName();
+        ResourcePath resourcePath = getRealResourcePath(relativePath);
         minioClient.putObject(
-                PutObjectArgs.builder()
-                        .bucket(USERS_DATA_BUCKET)
-                        .object(resourcePath.real())
-                        .contentType(contentType)
-                        .stream(inputStream, FILE_SIZE_NOT_AVAILABLE, 10 * MB)
-                        .build()
+                buildPutObjectArgs(uploadingFile, resourcePath)
         );
         return resourcePath.relative();
-    }*//*
+    }
 
+    private PutObjectArgs buildPutObjectArgs(UploadingFile uploadingFile, ResourcePath resourcePath) {
+        if(uploadingFile.fileSize().isEmpty()){
+            return PutObjectArgs.builder()
+                    .bucket(USERS_DATA_BUCKET)
+                    .object(resourcePath.real())
+                    .contentType(uploadingFile.contentType())
+                    .stream(uploadingFile.inputStream(), FILE_SIZE_NOT_AVAILABLE, 10 * MB)
+                    .build();
+        }
+        return PutObjectArgs.builder()
+                .bucket(USERS_DATA_BUCKET)
+                .object(resourcePath.real())
+                .contentType(uploadingFile.contentType())
+                .stream(uploadingFile.inputStream(), uploadingFile.fileSize().get(), FILE_SIZE_AVAILABLE)
+                .build();
+    }
 
     private List<String> uploadArchive(UploadRequest request) {
         List<String> uploadedResourcesNames = new ArrayList<>();
@@ -142,29 +157,11 @@ public class ResourceServiceImpl implements ResourceService {
             ZipEntry entry;
             while ((entry = zis.getNextEntry()) != null) {
                 if (entry.isDirectory()) {
-                    //TODO check entryname ends on "/"
-                    ResourcePath resourcePath = getRealResourcePath(request.targetDirectory() + entry.getName());
-                    uploadedResourcesNames.add(mkDir(resourcePath.real()));
+                    uploadedResourcesNames.add(createEmptyDirectory(request, entry.getName()));
                     zis.closeEntry();
                     continue;
                 }
-                //TODO check mark feature, or does it detect type without bad consequences? (it reads from is so later i get 0. Need to read it all in byte array or find out workaround)
-                BufferedInputStream bis = new BufferedInputStream(zis);
-                String contentType = tika.detect(bis);
-
-
-                //TODO get content type, size and refactoring
-                */
-/*ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                byte[] buffer = new byte[1024];
-                int len;
-                while ((len = zis.read(buffer)) > 0) {
-                    baos.write(buffer, 0, len);
-                }
-                byte[] fileData = baos.toByteArray();*//*
-
-
-                uploadedResourcesNames.add(uploadFile(bis, entry.getName(), contentType, request.targetDirectory()));
+                uploadedResourcesNames.add(uploadFileFromArchive(zis, entry, request));
                 zis.closeEntry();
             }
         } catch (Exception e) {
@@ -172,6 +169,28 @@ public class ResourceServiceImpl implements ResourceService {
             throw new RuntimeException(e);
         }
         return uploadedResourcesNames;
+    }
+
+    private String uploadFileFromArchive(ZipInputStream archiveInputStream, ZipEntry entry, UploadRequest request) throws Exception {
+        String contentType = getFileContentTypeFromStream(archiveInputStream);
+        UploadingFile uploadingFile = UploadingFile.withUnKnownFileSize(
+                entry.getName(),
+                contentType,
+                request.targetDirectory(),
+                archiveInputStream
+        );
+        return uploadFile(uploadingFile);
+    }
+
+    private String getFileContentTypeFromStream(ZipInputStream inputStream) throws IOException {
+        TikaInputStream tikaInputStream = TikaInputStream.get(inputStream);
+        return tika.detect(tikaInputStream);
+    }
+
+    private String createEmptyDirectory(UploadRequest request, String directoryName) {
+        ResourcePath resourcePath = getRealResourcePath(request.targetDirectory() + directoryName);
+        minioService.createEmptyDirectory(USERS_DATA_BUCKET, resourcePath.real());
+        return resourcePath.relative();
     }
 
     private boolean isArchive(UploadRequest request) {
@@ -188,4 +207,4 @@ public class ResourceServiceImpl implements ResourceService {
         return null;
     }
 }
-*/
+

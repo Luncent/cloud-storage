@@ -1,13 +1,21 @@
 package it.luncent.cloud_storage.minio.service;
 
-import io.minio.*;
+import io.minio.BucketExistsArgs;
+import io.minio.GetObjectArgs;
+import io.minio.GetObjectResponse;
+import io.minio.MakeBucketArgs;
+import io.minio.MinioClient;
+import io.minio.ObjectWriteResponse;
+import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
+import io.minio.StatObjectArgs;
+import io.minio.StatObjectResponse;
 import it.luncent.cloud_storage.minio.exception.MinioException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.io.OutputStream;
 
 //TODO rethink exception handling
 @Service
@@ -63,7 +71,7 @@ public class MinioServiceImpl implements MinioService {
     }
 
     @Override
-    public void createEmptyDirectory(String bucketName, String targetDirectory) {
+    public String createEmptyDirectory(String bucketName, String targetDirectory) {
         try {
             ObjectWriteResponse response = minioClient.putObject(
                     PutObjectArgs.builder()
@@ -72,6 +80,7 @@ public class MinioServiceImpl implements MinioService {
                             .stream(new ByteArrayInputStream(new byte[EMPTY_FOLDER_SIZE]), EMPTY_FOLDER_SIZE, FILE_SIZE_IS_KNOWN)
                             .build()
             );
+            return response.object();
         } catch (Exception ex) {
             throw new MinioException(ex.getMessage(), ex);
         }

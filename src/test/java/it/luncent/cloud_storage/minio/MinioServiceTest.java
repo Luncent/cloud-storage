@@ -47,7 +47,6 @@ public class MinioServiceTest {
     void createBucket() throws Exception{
         minioService.createBucket(BUCKET_NAME);
         assertThat(minioService.bucketExists(BUCKET_NAME)).isTrue();
-
     }
 
     @Test

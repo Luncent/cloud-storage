@@ -4,6 +4,7 @@ import io.minio.StatObjectResponse;
 
 import java.io.InputStream;
 
+//TODO change parameters and return types
 public interface MinioService {
 
     void createBucket(String bucketName);
@@ -18,5 +19,5 @@ public interface MinioService {
 
     InputStream downloadFile(String bucketName, String fileName);
 
-    void createEmptyDirectory(String bucketName, String folderName);
+    String createEmptyDirectory(String bucketName, String folderName);
 }

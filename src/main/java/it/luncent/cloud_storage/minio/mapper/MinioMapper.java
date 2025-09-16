@@ -2,7 +2,7 @@ package it.luncent.cloud_storage.minio.mapper;
 
 import io.minio.StatObjectResponse;
 import it.luncent.cloud_storage.minio.constants.ResourceType;
-import it.luncent.cloud_storage.minio.model.ResourcePath;
+import it.luncent.cloud_storage.minio.model.common.ResourcePath;
 import it.luncent.cloud_storage.minio.model.response.ResourceMetadataResponse;
 import org.mapstruct.Mapper;
 

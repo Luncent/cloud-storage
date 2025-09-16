@@ -9,10 +9,8 @@ import java.util.List;
 
 public interface ResourceService {
 
-    //implemented
     void createBucketForUsersData();
 
-    //implemented but need extra work
     ResourceMetadataResponse getResourceMetadata(String path);
 
     List<ResourceMetadataResponse> upload(UploadRequest request);
