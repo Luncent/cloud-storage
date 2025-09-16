@@ -172,19 +172,15 @@ public class ResourceServiceImpl implements ResourceService {
     }
 
     private String uploadFileFromArchive(ZipInputStream archiveInputStream, ZipEntry entry, UploadRequest request) throws Exception {
-        String contentType = getFileContentTypeFromStream(archiveInputStream);
+        BufferedInputStream bufferedInputStream = new BufferedInputStream(archiveInputStream);
+        String contentType = tika.detect(bufferedInputStream);
         UploadingFile uploadingFile = UploadingFile.withUnKnownFileSize(
                 entry.getName(),
                 contentType,
                 request.targetDirectory(),
-                archiveInputStream
+                bufferedInputStream
         );
         return uploadFile(uploadingFile);
-    }
-
-    private String getFileContentTypeFromStream(ZipInputStream inputStream) throws IOException {
-        TikaInputStream tikaInputStream = TikaInputStream.get(inputStream);
-        return tika.detect(tikaInputStream);
     }
 
     private String createEmptyDirectory(UploadRequest request, String directoryName) {

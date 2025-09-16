@@ -89,12 +89,9 @@ public class MinioTestDataTest {
         resourceService.upload(uploadRequest);
     }*/
 
-    @Test
-    public void createUploadRequest() throws IOException {
+    public UploadRequest createUploadRequest() throws IOException {
         MultipartFile multipartFile = new MockMultipartFile("folder1/", new FileInputStream(ARCHIVE_PATH));
-        UploadRequest uploadRequest = new UploadRequest(TEST_TARGET_DIRECTORY, multipartFile);
-        resourceService.upload(uploadRequest);
-        //return uploadRequest;
+        return new UploadRequest(TEST_TARGET_DIRECTORY, multipartFile);
     }
 
     @Test
