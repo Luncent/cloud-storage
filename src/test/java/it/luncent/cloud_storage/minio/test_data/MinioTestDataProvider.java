@@ -1,20 +1,17 @@
 
 package it.luncent.cloud_storage.minio.test_data;
 
-import it.luncent.cloud_storage.config.MinioTestConfig;
 import it.luncent.cloud_storage.minio.model.request.UploadRequest;
 import it.luncent.cloud_storage.minio.service.ResourceService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.zip.ZipEntry;
@@ -24,11 +21,8 @@ import static it.luncent.cloud_storage.minio.test_data.MinioConstants.ARCHIVE_PA
 import static it.luncent.cloud_storage.minio.test_data.MinioConstants.DIRECTORY_TO_ARCHIVE;
 import static it.luncent.cloud_storage.minio.test_data.MinioConstants.TEST_TARGET_DIRECTORY;
 
-@SpringJUnitConfig(
-        classes = {MinioTestConfig.class},
-        initializers = ConfigDataApplicationContextInitializer.class
-)
-public class MinioTestDataTest {
+@Component
+public class MinioTestDataProvider {
 
     @Autowired
     private ResourceService resourceService;
@@ -94,7 +88,6 @@ public class MinioTestDataTest {
         return new UploadRequest(TEST_TARGET_DIRECTORY, multipartFile);
     }
 
-    @Test
     public void createZipArchive() {
         try (ZipOutputStream zipOutputStream = new ZipOutputStream(new FileOutputStream(ARCHIVE_PATH))) {
             File directoryToArchive = new File(DIRECTORY_TO_ARCHIVE);

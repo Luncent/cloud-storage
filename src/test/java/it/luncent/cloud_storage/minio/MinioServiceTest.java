@@ -4,6 +4,7 @@ import io.minio.MinioClient;
 import it.luncent.cloud_storage.config.MinioTestConfig;
 import it.luncent.cloud_storage.minio.exception.MinioException;
 import it.luncent.cloud_storage.minio.service.MinioService;
+import it.luncent.cloud_storage.minio.test_data.MinioTestDataProvider;
 import org.apache.tika.Tika;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
@@ -32,6 +33,8 @@ public class MinioServiceTest {
     @Autowired
     private MinioService minioService;
     @Autowired
+    private MinioTestDataProvider minioTestDataProvider;
+    @Autowired
     private MinioClient minioClient;
     @Autowired
     private Tika tika;
@@ -44,7 +47,8 @@ public class MinioServiceTest {
     }*/
 
     @Test
-    void createBucket() throws Exception{
+    void createBucket(){
+        minioTestDataProvider.createZipArchive();
         minioService.createBucket(BUCKET_NAME);
         assertThat(minioService.bucketExists(BUCKET_NAME)).isTrue();
     }
