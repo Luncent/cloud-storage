@@ -7,9 +7,7 @@ import it.luncent.cloud_storage.minio.model.response.ResourceMetadataResponse;
 import java.io.InputStream;
 import java.util.List;
 
-public interface ResourceService {
-
-    void createBucketForUsersData();
+public interface StorageService {
 
     ResourceMetadataResponse getResourceMetadata(String path);
 

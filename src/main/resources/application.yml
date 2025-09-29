@@ -19,6 +19,7 @@ minio:
   endpoint: "http://localhost:9000"
   username: admin
   password: 12345678
+  users_data_bucket: "user-files"
 
 logging:
   level:

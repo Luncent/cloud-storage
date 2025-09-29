@@ -2,8 +2,7 @@
 package it.luncent.cloud_storage.minio.test_data;
 
 import it.luncent.cloud_storage.minio.model.request.UploadRequest;
-import it.luncent.cloud_storage.minio.service.ResourceService;
-import org.junit.jupiter.api.Test;
+import it.luncent.cloud_storage.minio.service.StorageService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.stereotype.Component;
@@ -25,7 +24,7 @@ import static it.luncent.cloud_storage.minio.test_data.MinioConstants.TEST_TARGE
 public class MinioTestDataProvider {
 
     @Autowired
-    private ResourceService resourceService;
+    private StorageService storageService;
 
     /*//first call prefix is uploading folderName
     public void uploadDirectoryMain(String targetDirectory, String prefix, Path folder) {

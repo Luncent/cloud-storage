@@ -32,19 +32,6 @@ public class MinioServiceImpl implements MinioService {
     private final MinioClient minioClient;
 
     @Override
-    public void createBucket(String bucketName) {
-        try {
-            minioClient.makeBucket(
-                    MakeBucketArgs.builder()
-                            .bucket(bucketName)
-                            .build()
-            );
-        } catch (Exception e) {
-            throw new MinioException(e.getMessage(), e);
-        }
-    }
-
-    @Override
     public boolean bucketExists(String bucketName) {
         try {
             return minioClient.bucketExists(

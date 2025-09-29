@@ -12,57 +12,49 @@ import it.luncent.cloud_storage.minio.model.response.ResourceMetadataResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tika.Tika;
-import org.apache.tika.io.TikaInputStream;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedInputStream;
-import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-//TODO add event listener to create bucket if it not exists when app starts
+import static java.util.stream.Collectors.toList;
+
 //TODO rethink exception handling
+//TODO get bucket name for users from properties files
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class ResourceServiceImpl implements ResourceService {
+public class StorageServiceImpl implements StorageService {
     private static final String USER_RESOURCE_PATH_TEMPLATE = "user-%d-files/%s";
-    private static final String USERS_DATA_BUCKET = "user-files";
     private static final Long FILE_SIZE_NOT_AVAILABLE = -1L;
     private static final Long FILE_SIZE_AVAILABLE = -1L;
-
     private static final Long MB = 1024L * 1024L;
-
 
     private final MinioClient minioClient;
     private final MinioMapper minioMapper;
     private final Tika tika;
-
     private final MinioService minioService;
 
-    @Override
-    public void createBucketForUsersData() {
-        if (!minioService.bucketExists(USERS_DATA_BUCKET)) {
-            minioService.createBucket(USERS_DATA_BUCKET);
-        }
-    }
+    @Value("${minio.usersDataBucket}")
+    private String usersDataBucket;
 
     //TODO make method for exception handling + strategy for converting minio exceptions to custom ones
     @Override
     public ResourceMetadataResponse getResourceMetadata(String relativePath) {
-        ResourcePath resourcePath = getRealResourcePath(relativePath);
-        if (isFolder(relativePath)) {
+        ResourcePath resourcePath = getResourcePath(relativePath);
+        if (isDirectory(relativePath)) {
             return minioMapper.mapToFolderResponse(resourcePath);
         }
         try {
             StatObjectResponse objectMetadata = minioClient.statObject(
                     StatObjectArgs.builder()
-                            .bucket(USERS_DATA_BUCKET)
+                            .bucket(usersDataBucket)
                             .object(resourcePath.real())
                             .build()
             );
@@ -78,19 +70,13 @@ public class ResourceServiceImpl implements ResourceService {
         }
     }
 
-    //TODO get userId from SecurityContext
-    private ResourcePath getRealResourcePath(String relativePath) {
-        String realPath = String.format(USER_RESOURCE_PATH_TEMPLATE, 1, relativePath);
-        return new ResourcePath(relativePath, realPath);
-    }
-
-    private boolean isFolder(String path) {
-        return path.endsWith("/");
-    }
-
     @Override
     public void deleteResource(String path) {
-
+        if (isDirectory(path)) {
+            deleteDirectory(path);
+            return;
+        }
+        deleteFile();
     }
 
     @Override
@@ -105,27 +91,52 @@ public class ResourceServiceImpl implements ResourceService {
 
     @Override
     public List<ResourceMetadataResponse> upload(UploadRequest request) {
-        try {
-            List<String> uploadedResourcesNames = new ArrayList<>();
-            if (isArchive(request)) {
-                uploadedResourcesNames.addAll(uploadArchive(request));
-            } else {
-                UploadingFile uploadingFile = UploadingFile.withKnownFileSize(request);
-                uploadedResourcesNames.add(uploadFile(uploadingFile));
-            }
-            uploadedResourcesNames.forEach(System.out::println);
-        } catch (Exception e) {
-            log.debug(e.getMessage(), e);
-            //TODO think about exception
-            throw new MinioException(e.getMessage(), e);
+        List<String> uploadedResourcesNames = new ArrayList<>();
+        if (isArchive(request)) {
+            //TODO check should get relative path
+            uploadedResourcesNames.addAll(uploadArchive(request));
+        } else {
+            //TODO check should get relative path
+            uploadedResourcesNames.add(uploadFileResource(request));
         }
-        //TODO correct response
+        return uploadedResourcesNames.stream()
+                .map(this::getResourceMetadata)
+                .collect(toList());
+    }
+
+    @Override
+    public List<ResourceMetadataResponse> getDirectoryContents(String path) {
         return List.of();
+    }
+
+    @Override
+    public InputStream downloadResource(String path) {
+        return null;
+    }
+
+    //TODO get userId from SecurityContext
+    private ResourcePath getResourcePath(String relativePath) {
+        String realPath = String.format(USER_RESOURCE_PATH_TEMPLATE, 1, relativePath);
+        return new ResourcePath(relativePath, realPath);
+    }
+
+    private boolean isDirectory(String path) {
+        return path.endsWith("/");
+    }
+
+    private String uploadFileResource(UploadRequest request) {
+        try {
+            UploadingFile uploadingFile = UploadingFile.withKnownFileSize(request);
+            return uploadFile(uploadingFile);
+        } catch (Exception e) {
+            //TODO make method to handle minioException and throw corresponding one
+            throw new RuntimeException(e);
+        }
     }
 
     private String uploadFile(UploadingFile uploadingFile) throws Exception {
         String relativePath = uploadingFile.targetDirectory() + uploadingFile.fileName();
-        ResourcePath resourcePath = getRealResourcePath(relativePath);
+        ResourcePath resourcePath = getResourcePath(relativePath);
         minioClient.putObject(
                 buildPutObjectArgs(uploadingFile, resourcePath)
         );
@@ -133,16 +144,16 @@ public class ResourceServiceImpl implements ResourceService {
     }
 
     private PutObjectArgs buildPutObjectArgs(UploadingFile uploadingFile, ResourcePath resourcePath) {
-        if(uploadingFile.fileSize().isEmpty()){
+        if (uploadingFile.fileSize().isEmpty()) {
             return PutObjectArgs.builder()
-                    .bucket(USERS_DATA_BUCKET)
+                    .bucket(usersDataBucket)
                     .object(resourcePath.real())
                     .contentType(uploadingFile.contentType())
                     .stream(uploadingFile.inputStream(), FILE_SIZE_NOT_AVAILABLE, 10 * MB)
                     .build();
         }
         return PutObjectArgs.builder()
-                .bucket(USERS_DATA_BUCKET)
+                .bucket(usersDataBucket)
                 .object(resourcePath.real())
                 .contentType(uploadingFile.contentType())
                 .stream(uploadingFile.inputStream(), uploadingFile.fileSize().get(), FILE_SIZE_AVAILABLE)
@@ -184,8 +195,8 @@ public class ResourceServiceImpl implements ResourceService {
     }
 
     private String createEmptyDirectory(UploadRequest request, String directoryName) {
-        ResourcePath resourcePath = getRealResourcePath(request.targetDirectory() + directoryName);
-        minioService.createEmptyDirectory(USERS_DATA_BUCKET, resourcePath.real());
+        ResourcePath resourcePath = getResourcePath(request.targetDirectory() + directoryName);
+        minioService.createEmptyDirectory(usersDataBucket, resourcePath.real());
         return resourcePath.relative();
     }
 
@@ -193,14 +204,5 @@ public class ResourceServiceImpl implements ResourceService {
         return !request.file().getResource().isFile();
     }
 
-    @Override
-    public List<ResourceMetadataResponse> getDirectoryContents(String path) {
-        return List.of();
-    }
-
-    @Override
-    public InputStream downloadResource(String path) {
-        return null;
-    }
 }
 

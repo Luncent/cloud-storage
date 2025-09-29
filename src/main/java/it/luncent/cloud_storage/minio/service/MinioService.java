@@ -5,9 +5,8 @@ import io.minio.StatObjectResponse;
 import java.io.InputStream;
 
 //TODO change parameters and return types
+//TODO remove bucket creation in code do it in docker
 public interface MinioService {
-
-    void createBucket(String bucketName);
 
     boolean bucketExists(String bucketName);
 

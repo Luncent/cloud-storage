@@ -3,9 +3,15 @@ package it.luncent.cloud_storage.minio;
 import io.minio.MinioClient;
 import it.luncent.cloud_storage.config.MinioTestConfig;
 import it.luncent.cloud_storage.minio.exception.MinioException;
+import it.luncent.cloud_storage.minio.model.request.UploadRequest;
 import it.luncent.cloud_storage.minio.service.MinioService;
+import it.luncent.cloud_storage.minio.service.StorageService;
 import it.luncent.cloud_storage.minio.test_data.MinioTestDataProvider;
 import org.apache.tika.Tika;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,42 +34,51 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
         initializers = ConfigDataApplicationContextInitializer.class
 )
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
-public class MinioServiceTest {
+public class StorageServiceTest {
 
     @Autowired
     private MinioService minioService;
     @Autowired
     private MinioTestDataProvider minioTestDataProvider;
     @Autowired
+    private StorageService storageService;
+    @Autowired
     private MinioClient minioClient;
     @Autowired
     private Tika tika;
 
-    /*@AfterAll
-    public void cleanUp() throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
-        minioClient.removeBucket(RemoveBucketArgs.builder()
-                .bucket(BUCKET_NAME)
-                .build());
-    }*/
+    @BeforeAll
+    public void cleanUp() {
+        minioTestDataProvider.createZipArchive();
+    }
+
+    @BeforeEach
+    public void setUp() throws IOException {
+        UploadRequest uploadRequest = minioTestDataProvider.createUploadRequest();
+        storageService.upload(uploadRequest);
+    }
+    @AfterEach
+    public void clean() {
+
+    }
 
     @Test
-    void createBucket(){
+    void createBucket() {
         minioTestDataProvider.createZipArchive();
-        minioService.createBucket(BUCKET_NAME);
         assertThat(minioService.bucketExists(BUCKET_NAME)).isTrue();
     }
 
     @Test
-    void createEmptyDirectory(){
+    void createEmptyDirectory() {
         minioService.createEmptyDirectory(BUCKET_NAME, "/lv1/lvl2/");
-        assertThat(minioService.getObject(BUCKET_NAME, "/lv1/lvl2/"+"empty-folder-tag")).isNotNull();
+        assertThat(minioService.getObject(BUCKET_NAME, "/lv1/lvl2/" + "empty-folder-tag")).isNotNull();
     }
 
     @Test
     void uploadFile() throws IOException {
         File file = new File("src/test/resources/minio_test_data/folder1/nested2/gggg.html");
         String contentType = tika.detect(file);
-        minioService.uploadFile(BUCKET_NAME, file.getName(), new FileInputStream(file),contentType);
+        minioService.uploadFile(BUCKET_NAME, file.getName(), new FileInputStream(file), contentType);
         assertThat(minioService.getObject(BUCKET_NAME, file.getName())).isNotNull();
     }
 
@@ -71,11 +86,11 @@ public class MinioServiceTest {
     void deleteFile() throws IOException {
         File file = new File("src/test/resources/minio_test_data/folder1/nested2/gggg.html");
         String contentType = tika.detect(file);
-        minioService.uploadFile(BUCKET_NAME, file.getName(), new FileInputStream(file),contentType);
+        minioService.uploadFile(BUCKET_NAME, file.getName(), new FileInputStream(file), contentType);
         assertThat(minioService.getObject(BUCKET_NAME, file.getName())).isNotNull();
 
         minioService.deleteFile(BUCKET_NAME, file.getName());
-        assertThrows(MinioException.class, ()-> minioService.getObject(BUCKET_NAME, file.getName()));
+        assertThrows(MinioException.class, () -> minioService.getObject(BUCKET_NAME, file.getName()));
 
     }
 
@@ -83,21 +98,21 @@ public class MinioServiceTest {
     void downloadFile() throws IOException {
         File file = new File("src/test/resources/minio_test_data/folder1/nested2/gggg.html");
         String contentType = tika.detect(file);
-        minioService.uploadFile(BUCKET_NAME, file.getName(), new FileInputStream(file),contentType);
+        minioService.uploadFile(BUCKET_NAME, file.getName(), new FileInputStream(file), contentType);
         assertThat(minioService.getObject(BUCKET_NAME, file.getName())).isNotNull();
 
-        try(BufferedInputStream bis = new BufferedInputStream(minioService.downloadFile(BUCKET_NAME, "gggg.html"));
-            BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream("src/test/resources/downloadedfile.html"))
-        ){
+        try (BufferedInputStream bis = new BufferedInputStream(minioService.downloadFile(BUCKET_NAME, "gggg.html"));
+             BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream("src/test/resources/downloadedfile.html"))
+        ) {
             byte[] buffer = new byte[1024];
             Integer readedBytes;
             while ((readedBytes = bis.read(buffer)) != -1) {
-                bos.write(buffer,0, readedBytes);
+                bos.write(buffer, 0, readedBytes);
             }
         }
 
         minioService.deleteFile(BUCKET_NAME, file.getName());
-        assertThrows(MinioException.class, ()-> minioService.getObject(BUCKET_NAME, file.getName()));
+        assertThrows(MinioException.class, () -> minioService.getObject(BUCKET_NAME, file.getName()));
     }
 
    /* boolean bucketExists(String bucketName);
