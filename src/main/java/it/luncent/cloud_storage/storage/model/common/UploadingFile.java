@@ -1,6 +1,6 @@
-package it.luncent.cloud_storage.minio.model.common;
+package it.luncent.cloud_storage.storage.model.common;
 
-import it.luncent.cloud_storage.minio.model.request.UploadRequest;
+import it.luncent.cloud_storage.storage.model.request.UploadRequest;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;

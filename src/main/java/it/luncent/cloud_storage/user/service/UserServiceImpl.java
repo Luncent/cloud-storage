@@ -3,31 +3,34 @@ package it.luncent.cloud_storage.user.service;
 import it.luncent.cloud_storage.security.exception.UsernameExistsException;
 import it.luncent.cloud_storage.security.model.request.RegistrationRequest;
 import it.luncent.cloud_storage.user.entity.User;
+import it.luncent.cloud_storage.user.mapper.UserMapper;
 import it.luncent.cloud_storage.user.model.UserResponse;
 import it.luncent.cloud_storage.user.repository.UserRepository;
-import it.luncent.cloud_storage.user.mapper.UserMapper;
 import lombok.AllArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+
+import static java.lang.String.format;
 
 @Service
 @AllArgsConstructor
 public class UserServiceImpl implements UserService, UserDetailsService {
+    private static final String USER_ALREADY_EXISTS_TEMPLATE = "User with username %s already exists";
+
     private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new UsernameNotFoundException(username));
+        User user = findByUsername(username);
         return new org.springframework.security.core.userdetails.User(
                 username,
                 user.getPassword(),
@@ -44,7 +47,12 @@ public class UserServiceImpl implements UserService, UserDetailsService {
             User user = userRepository.save(newUser);
             return userMapper.mapToResponse(user);
         }catch (DataIntegrityViolationException e){
-            throw new UsernameExistsException(newUser.getUsername(), e);
+            throw new UsernameExistsException(format(USER_ALREADY_EXISTS_TEMPLATE, newUser.getUsername()), e);
         }
+    }
+
+    private User findByUsername(String username) {
+        return userRepository.findByUsername(username)
+                .orElseThrow(() -> new BadCredentialsException("Bad credentials"));
     }
 }

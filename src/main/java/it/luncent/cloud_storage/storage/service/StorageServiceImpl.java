@@ -1,17 +1,20 @@
-package it.luncent.cloud_storage.minio.service;
+package it.luncent.cloud_storage.storage.service;
 
 import io.minio.*;
 import io.minio.errors.*;
+import it.luncent.cloud_storage.config.properties.MinioProperties;
 import it.luncent.cloud_storage.minio.exception.MinioException;
-import it.luncent.cloud_storage.minio.mapper.MinioMapper;
-import it.luncent.cloud_storage.minio.model.common.ResourcePath;
-import it.luncent.cloud_storage.minio.model.common.UploadingFile;
-import it.luncent.cloud_storage.minio.model.request.MoveRenameRequest;
-import it.luncent.cloud_storage.minio.model.request.UploadRequest;
-import it.luncent.cloud_storage.minio.model.response.ResourceMetadataResponse;
+import it.luncent.cloud_storage.minio.service.MinioService;
+import it.luncent.cloud_storage.storage.mapper.ResourceMapper;
+import it.luncent.cloud_storage.storage.model.common.ResourcePath;
+import it.luncent.cloud_storage.storage.model.common.UploadingFile;
+import it.luncent.cloud_storage.storage.model.request.MoveRenameRequest;
+import it.luncent.cloud_storage.storage.model.request.UploadRequest;
+import it.luncent.cloud_storage.storage.model.response.ResourceMetadataResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tika.Tika;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -37,28 +40,27 @@ public class StorageServiceImpl implements StorageService {
     private static final Long MB = 1024L * 1024L;
 
     private final MinioClient minioClient;
-    private final MinioMapper minioMapper;
+    private final ResourceMapper resourceMapper;
     private final Tika tika;
     private final MinioService minioService;
-
-    @Value("${minio.usersDataBucket}")
-    private String usersDataBucket;
+    private final MinioProperties minioProperties;
 
     //TODO make method for exception handling + strategy for converting minio exceptions to custom ones
     @Override
     public ResourceMetadataResponse getResourceMetadata(String relativePath) {
         ResourcePath resourcePath = getResourcePath(relativePath);
         if (isDirectory(relativePath)) {
-            return minioMapper.mapToFolderResponse(resourcePath);
+            //bad - should check existence
+            return resourceMapper.mapToFolderResponse(resourcePath);
         }
         try {
             StatObjectResponse objectMetadata = minioClient.statObject(
                     StatObjectArgs.builder()
-                            .bucket(usersDataBucket)
+                            .bucket(minioProperties.usersBucket())
                             .object(resourcePath.real())
                             .build()
             );
-            return minioMapper.mapToFileResponse(resourcePath, objectMetadata);
+            return resourceMapper.mapToFileResponse(resourcePath, objectMetadata);
         } catch (ErrorResponseException ex) {
             if (ex.errorResponse().code().equals("NoSuchKey")) {
                 //TODO not found should be
@@ -76,7 +78,13 @@ public class StorageServiceImpl implements StorageService {
             deleteDirectory(path);
             return;
         }
-        deleteFile();
+        deleteFile(path);
+    }
+
+    private void deleteDirectory(String path) {
+    }
+
+    private void deleteFile(String path) {
     }
 
     @Override
@@ -146,14 +154,14 @@ public class StorageServiceImpl implements StorageService {
     private PutObjectArgs buildPutObjectArgs(UploadingFile uploadingFile, ResourcePath resourcePath) {
         if (uploadingFile.fileSize().isEmpty()) {
             return PutObjectArgs.builder()
-                    .bucket(usersDataBucket)
+                    .bucket(minioProperties.usersBucket())
                     .object(resourcePath.real())
                     .contentType(uploadingFile.contentType())
                     .stream(uploadingFile.inputStream(), FILE_SIZE_NOT_AVAILABLE, 10 * MB)
                     .build();
         }
         return PutObjectArgs.builder()
-                .bucket(usersDataBucket)
+                .bucket(minioProperties.usersBucket())
                 .object(resourcePath.real())
                 .contentType(uploadingFile.contentType())
                 .stream(uploadingFile.inputStream(), uploadingFile.fileSize().get(), FILE_SIZE_AVAILABLE)
@@ -196,7 +204,7 @@ public class StorageServiceImpl implements StorageService {
 
     private String createEmptyDirectory(UploadRequest request, String directoryName) {
         ResourcePath resourcePath = getResourcePath(request.targetDirectory() + directoryName);
-        minioService.createEmptyDirectory(usersDataBucket, resourcePath.real());
+        minioService.createEmptyDirectory(minioProperties.usersBucket(), resourcePath.real());
         return resourcePath.relative();
     }
 

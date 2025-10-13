@@ -1,13 +1,13 @@
-package it.luncent.cloud_storage.minio.mapper;
+package it.luncent.cloud_storage.storage.mapper;
 
 import io.minio.StatObjectResponse;
-import it.luncent.cloud_storage.minio.constants.ResourceType;
-import it.luncent.cloud_storage.minio.model.common.ResourcePath;
-import it.luncent.cloud_storage.minio.model.response.ResourceMetadataResponse;
+import it.luncent.cloud_storage.storage.constants.ResourceType;
+import it.luncent.cloud_storage.storage.model.common.ResourcePath;
+import it.luncent.cloud_storage.storage.model.response.ResourceMetadataResponse;
 import org.mapstruct.Mapper;
 
 @Mapper(componentModel = "spring")
-public interface MinioMapper {
+public interface ResourceMapper {
 
     default ResourceMetadataResponse mapToFolderResponse(ResourcePath path){
         String fullPath = path.real();

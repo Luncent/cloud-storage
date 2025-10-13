@@ -1,8 +1,8 @@
 
 package it.luncent.cloud_storage.minio.test_data;
 
-import it.luncent.cloud_storage.minio.model.request.UploadRequest;
-import it.luncent.cloud_storage.minio.service.StorageService;
+import it.luncent.cloud_storage.storage.model.request.UploadRequest;
+import it.luncent.cloud_storage.storage.service.StorageService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.stereotype.Component;

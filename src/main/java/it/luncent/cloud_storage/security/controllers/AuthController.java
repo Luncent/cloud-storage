@@ -7,7 +7,9 @@ import it.luncent.cloud_storage.security.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -27,10 +29,11 @@ public class AuthController {
     }
 
     @PostMapping("/sign-up")
-    public ResponseEntity<AuthenticationResponse> signUp(@RequestBody RegistrationRequest registrationRequest,
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public ResponseEntity<AuthenticationResponse> signUp(@RequestBody @Validated RegistrationRequest registrationRequest,
                                                          HttpServletRequest request,
                                                          HttpServletResponse response){
-        return ResponseEntity.ok(authService.signUp(registrationRequest, request, response));
+        return new ResponseEntity(authService.signUp(registrationRequest, request, response), HttpStatus.CREATED);
     }
 
     @PostMapping("/sign-out")

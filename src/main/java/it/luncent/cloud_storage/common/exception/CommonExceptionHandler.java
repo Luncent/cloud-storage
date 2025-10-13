@@ -1,0 +1,32 @@
+package it.luncent.cloud_storage.common.exception;
+
+import it.luncent.cloud_storage.security.exception.UsernameExistsException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.ConstraintViolationException;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.BindingResult;
+import org.springframework.validation.ObjectError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ControllerAdvice;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+
+import java.util.stream.Collectors;
+
+@ControllerAdvice
+@Slf4j
+public class CommonExceptionHandler {
+
+    @ExceptionHandler({ConstraintViolationException.class, MethodArgumentNotValidException.class})
+    public ResponseEntity<ErrorMessage> handleUsernameExistsException(BindingResult ex, HttpServletRequest request, HttpServletResponse response) {
+        String error = ex.getAllErrors().stream()
+                .map(ObjectError::getDefaultMessage)
+                .collect(Collectors.joining(", "));
+        log.error(error, ex);
+        ErrorMessage errorMessage = new ErrorMessage(error);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorMessage);
+    }
+
+}

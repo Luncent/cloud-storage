@@ -1,8 +1,8 @@
-package it.luncent.cloud_storage.minio.service;
+package it.luncent.cloud_storage.storage.service;
 
-import it.luncent.cloud_storage.minio.model.request.MoveRenameRequest;
-import it.luncent.cloud_storage.minio.model.request.UploadRequest;
-import it.luncent.cloud_storage.minio.model.response.ResourceMetadataResponse;
+import it.luncent.cloud_storage.storage.model.request.MoveRenameRequest;
+import it.luncent.cloud_storage.storage.model.request.UploadRequest;
+import it.luncent.cloud_storage.storage.model.response.ResourceMetadataResponse;
 
 import java.io.InputStream;
 import java.util.List;
