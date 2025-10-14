@@ -5,6 +5,7 @@ import it.luncent.cloud_storage.security.model.request.RegistrationRequest;
 import it.luncent.cloud_storage.security.model.response.AuthenticationResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.security.core.Authentication;
 
 public interface AuthService {
 
@@ -18,4 +19,6 @@ public interface AuthService {
 
     void signOut(HttpServletRequest request,
                  HttpServletResponse response);
+
+    Authentication getCurrentUser();
 }

@@ -53,6 +53,15 @@ public class AuthServiceImpl implements AuthService {
         securityContextRepository.saveContext(context, request, response);
     }
 
+    @Override
+    public Authentication getCurrentUser() {
+        return SecurityContextHolder.getContext().getAuthentication();
+    }
+    //TODO create Custom Authentication to store user id, create common interface with getName() getPassword() for registerDto and loginDto
+    private <T> AuthenticationResponse authenticate(HttpServletRequest request, HttpServletResponse response, T ){
+
+    }
+
     private void persistSecurityContext(Authentication authentication,
                                         HttpServletRequest request,
                                         HttpServletResponse response) {

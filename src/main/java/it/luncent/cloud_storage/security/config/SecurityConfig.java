@@ -1,51 +1,51 @@
-package it.luncent.cloud_storage.config;
+package it.luncent.cloud_storage.security.config;
 
+import it.luncent.cloud_storage.security.exception.customized_handler.CustomAccessDeniedHandler;
+import it.luncent.cloud_storage.security.exception.customized_handler.CustomAuthenticationEntryPoint;
+import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
-import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
-import org.springframework.security.web.util.matcher.RequestMatcher;
 
-
-//TODO cleanup
+//TODO попробовать добавить csrf токен
+// настроить корс под фронт
 @Configuration
 @EnableWebSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
+
+    private final CustomAccessDeniedHandler accessDeniedHandler;
+    private final CustomAuthenticationEntryPoint authenticationEntryPoint;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                    AuthenticationManager authManager) throws Exception {
-        RequestMatcher matcher = PathPatternRequestMatcher.withDefaults()
-                .matcher(HttpMethod.POST, "/api/auth/sign-in");
-
         return http
-                .csrf(csrfConfigurer -> csrfConfigurer.disable())
+                .csrf(AbstractHttpConfigurer::disable)
+                //.cors(cors-> cors.configurationSource())
                 .authorizeHttpRequests(authorize -> {
+                    authorize.requestMatchers("/api/auth/sign-out").authenticated();
                     authorize.requestMatchers(
-                            "/auth/sign-in",
-                            "/auth/sign-up",
+                            "api/auth/**",
                             "/free"
                     ).permitAll();
                     authorize.anyRequest().authenticated();
                 })
-                //.addFilter(new JsonUsernamePasswordAuthenticationFilter(authManager,matcher))
-/*                .logout(logoutConfigurer ->
-                        //это спринг будет обрабатывать выход или я могу по этому адресу контролер для выхода сделать?
-                        logoutConfigurer.logoutUrl("/api/auth/sing-out")
-                                //это что такое
-                                .addLogoutHandler(new LogoutHandler() {})
-                )*/
+                .exceptionHandling(exceptionHandlerConfigurer -> {
+                    exceptionHandlerConfigurer.accessDeniedHandler(accessDeniedHandler);
+                    exceptionHandlerConfigurer.authenticationEntryPoint(authenticationEntryPoint);
+                })
                 .build();
     }
 

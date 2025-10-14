@@ -48,13 +48,13 @@ public class StorageServiceTest {
 
     @BeforeAll
     public void cleanUp() {
-        minioTestDataProvider.createZipArchive();
+       // minioTestDataProvider.createZipArchive();
     }
 
     @BeforeEach
     public void setUp() throws IOException {
-        UploadRequest uploadRequest = minioTestDataProvider.createUploadRequest();
-        storageService.upload(uploadRequest);
+       /* UploadRequest uploadRequest = minioTestDataProvider.createUploadRequest();
+        storageService.upload(uploadRequest);*/
     }
     @AfterEach
     public void clean() {
@@ -63,7 +63,7 @@ public class StorageServiceTest {
 
     @Test
     void createBucket() {
-        minioTestDataProvider.createZipArchive();
+        //minioTestDataProvider.createZipArchive();
         assertThat(minioService.bucketExists(BUCKET_NAME)).isTrue();
     }
 

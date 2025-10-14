@@ -1,6 +1,5 @@
 package it.luncent.cloud_storage.common.exception;
 
-import it.luncent.cloud_storage.security.exception.UsernameExistsException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.ConstraintViolationException;
@@ -20,13 +19,13 @@ import java.util.stream.Collectors;
 public class CommonExceptionHandler {
 
     @ExceptionHandler({ConstraintViolationException.class, MethodArgumentNotValidException.class})
-    public ResponseEntity<ErrorMessage> handleUsernameExistsException(BindingResult ex, HttpServletRequest request, HttpServletResponse response) {
+    public ResponseEntity<ErrorResponse> handleUsernameExistsException(BindingResult ex, HttpServletRequest request, HttpServletResponse response) {
         String error = ex.getAllErrors().stream()
                 .map(ObjectError::getDefaultMessage)
                 .collect(Collectors.joining(", "));
         log.error(error, ex);
-        ErrorMessage errorMessage = new ErrorMessage(error);
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorMessage);
+        ErrorResponse errorResponse = new ErrorResponse(error);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
     }
 
 }

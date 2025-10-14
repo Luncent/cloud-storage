@@ -1,82 +1,56 @@
-/*
 package it.luncent.cloud_storage.minio;
 
-import io.minio.*;
-import io.minio.errors.ErrorResponseException;
-import io.minio.errors.InsufficientDataException;
-import io.minio.errors.InternalException;
-import io.minio.errors.InvalidResponseException;
-import io.minio.errors.ServerException;
-import io.minio.errors.XmlParserException;
-import io.minio.messages.DeleteError;
-import io.minio.messages.DeleteObject;
-import io.minio.messages.Item;
-import it.luncent.cloud_storage.config.MinioConfig;
-import it.luncent.cloud_storage.minio.model.request.UploadRequest;
-import it.luncent.cloud_storage.minio.model.response.ResourceMetadataResponse;
-import it.luncent.cloud_storage.minio.service.ResourceService;
-import it.luncent.cloud_storage.minio.test_data.MinioTestDataRepositoryTest;
+import io.minio.MinioClient;
+import it.luncent.cloud_storage.minio.test_data.MinioTestDataProvider;
+import it.luncent.cloud_storage.storage.model.response.ResourceMetadataResponse;
+import it.luncent.cloud_storage.storage.service.StorageService;
 import org.apache.tika.Tika;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
-import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.stereotype.Component;
-import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
-import org.springframework.web.multipart.MultipartFile;
+import org.springframework.boot.test.context.SpringBootTest;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.List;
+import static org.assertj.core.api.Assertions.assertThat;
 
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
-
-@Component
+@SpringBootTest
 public class MinioTests {
 
     @Autowired
     private MinioClient minioClient;
     @Autowired
-    private ResourceService resourceService;
+    private StorageService storageService;
     @Autowired
     private Tika tika;
-    @Autowired
-    private MinioTestDataRepositoryTest minioTestDataRepositoryTest;
 
     @BeforeEach
     void fill() throws Exception {
-        minioTestDataRepositoryTest.fillMinio();
+        MinioTestDataProvider.fillTestData(storageService);
     }
 
     @AfterEach
     void clean() {
-        minioTestDataRepositoryTest.cleanMinio();
+        minioTestDataProvider.cleanMinio();
     }
 
     @Test
     void testGetFileResourceData(){
-        ResourceMetadataResponse metadataResponse = resourceService.getResourceMetadata("diplom/антиплагиатd.pdf");
+        ResourceMetadataResponse metadataResponse = storageService.getResourceMetadata("diplom/антиплагиатd.pdf");
         assertThat(metadataResponse.size()).isNotNull();
         assertThat(metadataResponse.path().endsWith("/")).isFalse();
     }
 
     @Test
     void testGetFolderResourceData(){
-        ResourceMetadataResponse metadataResponse = resourceService.getResourceMetadata("diplom/");
+        ResourceMetadataResponse metadataResponse = storageService.getResourceMetadata("diplom/");
         assertThat(metadataResponse.size()).isNull();
         assertThat(metadataResponse.path().endsWith("/")).isTrue();
     }
 
 
-    @Test
+    /*@Test
     void testBucketCreation(){
-        resourceService.createBucketForUsersData();
+        storageService.createBucketForUsersData();
     }
 
     @Test
@@ -106,9 +80,9 @@ public class MinioTests {
         MultipartFile multipartFile = new MockMultipartFile("file", "test.txt", "text/plain", "Hello World".getBytes());
 
         UploadRequest uploadRequest = new UploadRequest(null, null);
-        List<ResourceMetadataResponse> uploadedResources = resourceService.upload(uploadRequest);
+        List<ResourceMetadataResponse> uploadedResources = storageService.upload(uploadRequest);
         for(ResourceMetadataResponse resource : uploadedResources){
-            assertThat(resourceService.getResourceMetadata(resource.path())).isNotNull();
+            assertThat(storageService.getResourceMetadata(resource.path())).isNotNull();
         }
     }
 
@@ -124,7 +98,7 @@ public class MinioTests {
 
     @Test
     void fileResourceMetadataHasSizeField() throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
-        ResourceMetadataResponse response = resourceService.getResourceMetadata("second");
+        ResourceMetadataResponse response = storageService.getResourceMetadata("second");
 
         assertThat(response.size()).isNotNull();
 
@@ -300,8 +274,7 @@ public class MinioTests {
 
             moveDir("folder3/newFolder", "folder4/", "folder3/newFolder");
 
-            */
-/*minioClient.copyObject(
+            minioClient.copyObject(
                     CopyObjectArgs.builder()
                             .bucket("test")
                             .object("copy-folder/file1.txt")
@@ -316,7 +289,7 @@ public class MinioTests {
                             .bucket("test")
                             .object("copy-folder/file2.txt")
                             .build()
-            );*//*
+            );
 
         }catch (ErrorResponseException e){
             if(e.errorResponse().code().equals("NoSuchKey")){
@@ -324,6 +297,5 @@ public class MinioTests {
             }
             e.printStackTrace();
         }
-    }
+    }*/
 }
-*/

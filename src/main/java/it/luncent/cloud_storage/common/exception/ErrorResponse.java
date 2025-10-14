@@ -1,4 +1,4 @@
 package it.luncent.cloud_storage.common.exception;
 
-public record ErrorMessage(String message){
+public record ErrorResponse(String message){
 }

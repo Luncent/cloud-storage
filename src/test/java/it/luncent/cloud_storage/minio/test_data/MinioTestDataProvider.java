@@ -20,14 +20,14 @@ import static it.luncent.cloud_storage.minio.test_data.MinioConstants.ARCHIVE_PA
 import static it.luncent.cloud_storage.minio.test_data.MinioConstants.DIRECTORY_TO_ARCHIVE;
 import static it.luncent.cloud_storage.minio.test_data.MinioConstants.TEST_TARGET_DIRECTORY;
 
-@Component
+//@Component
 public class MinioTestDataProvider {
 
-    @Autowired
-    private StorageService storageService;
+/*    @Autowired
+    private StorageService storageService;*/
 
     /*//first call prefix is uploading folderName
-    public void uploadDirectoryMain(String targetDirectory, String prefix, Path folder) {
+    public static void uploadDirectoryMain(String targetDirectory, String prefix, Path folder) {
         try (DirectoryStream<Path> directoryResources = Files.newDirectoryStream(folder)) {
             for (Path resource : directoryResources) {
                 if (isDirectory(resource)) {
@@ -42,7 +42,7 @@ public class MinioTestDataProvider {
         }
     }
 
-    public void uploadFile(File file, String targetDirectory, String prefix) throws Exception {
+    public static void uploadFile(File file, String targetDirectory, String prefix) throws Exception {
         String contentType = tika.detect(file);
         String fileName = file.getName();
         try (BufferedInputStream bis = new BufferedInputStream(new FileInputStream(file))) {
@@ -57,12 +57,12 @@ public class MinioTestDataProvider {
         }
     }
 
-    public void fillMinio2() {
+    public static void fillMinio2() {
         Path folderPath = Path.of("src/test/resources/minio_test_data/folder1/");
         uploadDirectoryMain(TEST_USER_DIRECTORY + TEST_TARGET_DIRECTORY, TEST_COPING_DIRECTORY_NAME, folderPath);
     }
 
-    public void cleanMinio() {
+    public static void cleanMinio() {
         try {
             minioClient.removeObject(
                     RemoveObjectArgs.builder()
@@ -76,18 +76,23 @@ public class MinioTestDataProvider {
     }
 
     @Test
-    public void fillMinio() throws Exception {
+    public static void fillMinio() throws Exception {
         MultipartFile multipartFile = new MockMultipartFile("folder1/", new FileInputStream(ARCHIVE_PATH));
         UploadRequest uploadRequest = new UploadRequest(TEST_TARGET_DIRECTORY, multipartFile);
         resourceService.upload(uploadRequest);
     }*/
 
-    public UploadRequest createUploadRequest() throws IOException {
+    public static void fillTestData(StorageService storageService) throws IOException {
+        createZipArchive();
+        storageService.upload(createUploadRequest());
+    }
+
+    private static UploadRequest createUploadRequest() throws IOException {
         MultipartFile multipartFile = new MockMultipartFile("folder1/", new FileInputStream(ARCHIVE_PATH));
         return new UploadRequest(TEST_TARGET_DIRECTORY, multipartFile);
     }
 
-    public void createZipArchive() {
+    private static void createZipArchive() {
         try (ZipOutputStream zipOutputStream = new ZipOutputStream(new FileOutputStream(ARCHIVE_PATH))) {
             File directoryToArchive = new File(DIRECTORY_TO_ARCHIVE);
             addResourceToArchive(directoryToArchive, directoryToArchive.getName(), zipOutputStream);
@@ -96,7 +101,8 @@ public class MinioTestDataProvider {
         }
     }
 
-    private void addResourceToArchive(File resource, String resourceName, ZipOutputStream zipOutputStream) throws IOException {
+    @SuppressWarnings("DataFlowIssue")
+    private static void addResourceToArchive(File resource, String resourceName, ZipOutputStream zipOutputStream) throws IOException {
         if (resource.isDirectory()) {
             ZipEntry directory = new ZipEntry(resourceName + "/");
             zipOutputStream.putNextEntry(directory);
@@ -113,7 +119,7 @@ public class MinioTestDataProvider {
         zipOutputStream.closeEntry();
     }
 
-    private void writeFileToArchive(File resource, ZipOutputStream zipOutputStream) throws IOException {
+    private static void writeFileToArchive(File resource, ZipOutputStream zipOutputStream) throws IOException {
         try (BufferedInputStream bis = new BufferedInputStream(new FileInputStream(resource))) {
             byte[] buffer = new byte[1024];
             int read;
