@@ -1,6 +1,9 @@
 package it.luncent.cloud_storage.user.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import it.luncent.cloud_storage.security.exception.UsernameExistsException;
+import it.luncent.cloud_storage.security.model.UserModel;
 import it.luncent.cloud_storage.security.model.request.RegistrationRequest;
 import it.luncent.cloud_storage.user.entity.User;
 import it.luncent.cloud_storage.user.mapper.UserMapper;
@@ -27,12 +30,13 @@ public class UserServiceImpl implements UserService, UserDetailsService {
     private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
+    private final ObjectMapper objectMapper;
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         User user = findByUsername(username);
         return new org.springframework.security.core.userdetails.User(
-                username,
+                createPrincipal(user),
                 user.getPassword(),
                 new ArrayList<>()
         );
@@ -48,6 +52,15 @@ public class UserServiceImpl implements UserService, UserDetailsService {
             return userMapper.mapToResponse(user);
         }catch (DataIntegrityViolationException e){
             throw new UsernameExistsException(format(USER_ALREADY_EXISTS_TEMPLATE, newUser.getUsername()), e);
+        }
+    }
+
+    private String createPrincipal(User user) {
+        UserModel userModel = new UserModel(user.getId(), user.getUsername());
+        try {
+           return objectMapper.writeValueAsString(userModel);
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
         }
     }
 

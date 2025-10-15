@@ -2,7 +2,20 @@ package it.luncent.cloud_storage.security.model.request;
 
 import jakarta.validation.constraints.Size;
 
-public record RegistrationRequest (@Size(min=5, max = 25, message = "username must be in range from 5 to 25") String username,
-                                   String password,
-                                   String repeatedPassword) {
+public record RegistrationRequest (
+        @Size(min=5, max = 25, message = "username must be in range from 5 to 25")
+        String username,
+        String password,
+        String repeatedPassword
+) implements UsernamePasswordModel {
+
+    @Override
+    public String getUsername() {
+        return username;
+    }
+
+    @Override
+    public String getPassword() {
+        return password;
+    }
 }
