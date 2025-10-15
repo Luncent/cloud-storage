@@ -11,19 +11,9 @@ import org.springframework.security.core.Authentication;
 @Mapper(componentModel = "spring")
 public interface AuthMapper {
 
-    /*default UsernamePasswordAuthenticationToken mapToAuthentication(AuthenticationRequest request){
-        return new UsernamePasswordAuthenticationToken(request.username(), request.password());
-    }
-    default UsernamePasswordAuthenticationToken mapToAuthentication(RegistrationRequest request){
-        return new UsernamePasswordAuthenticationToken(request.username(), request.password());
-    }*/
-
     default UsernamePasswordAuthenticationToken mapToAuthentication(UsernamePasswordModel usernamePasswordModel){
         return new UsernamePasswordAuthenticationToken(usernamePasswordModel.getUsername(), usernamePasswordModel.getPassword());
     }
 
     AuthenticationResponse mapToResponse(UserModel userModel);
-
-
-
 }

@@ -44,7 +44,6 @@ public class UserServiceImpl implements UserService, UserDetailsService {
 
     @Override
     public UserResponse create(RegistrationRequest registrationRequest) {
-        //TODO try catch to handle unique constraint violation, when username exists
         User newUser = userMapper.mapToEntity(registrationRequest);
         newUser.setPassword(passwordEncoder.encode(newUser.getPassword()));
         try{

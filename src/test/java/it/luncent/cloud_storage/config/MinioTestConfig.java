@@ -1,21 +1,21 @@
 package it.luncent.cloud_storage.config;
 
-import it.luncent.cloud_storage.minio.mapper.ResourceMapperImpl;
-import it.luncent.cloud_storage.minio.service.MinioServiceImpl;
 import it.luncent.cloud_storage.storage.service.StorageServiceImpl;
-import it.luncent.cloud_storage.minio.test_data.MinioTestDataProvider;
+import it.luncent.cloud_storage.storage.test_data.MinioTestDataProvider;
+import it.luncent.cloud_storage.resource.mapper.ResourceMapperImpl;
+import it.luncent.cloud_storage.resource.service.ResourceServiceImpl;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Import;
 
 @TestConfiguration
 @Import({
-        StorageServiceImpl.class,
+        ResourceServiceImpl.class,
         ResourceMapperImpl.class,
-        MinioServiceImpl.class,
+        StorageServiceImpl.class,
         // MinioTestDataRepositoryTest.class
         MinioTestDataProvider.class,
         MinioConfig.class,
-        MinioServiceImpl.class,
+        StorageServiceImpl.class,
 })
 public class MinioTestConfig {
 

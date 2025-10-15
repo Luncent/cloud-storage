@@ -1,48 +1,73 @@
-package it.luncent.cloud_storage.minio;
+package it.luncent.cloud_storage.storage;
 
+import io.minio.ListObjectsArgs;
 import io.minio.MinioClient;
-import it.luncent.cloud_storage.minio.test_data.MinioTestDataProvider;
-import it.luncent.cloud_storage.storage.model.response.ResourceMetadataResponse;
-import it.luncent.cloud_storage.storage.service.StorageService;
+import io.minio.Result;
+import io.minio.messages.Item;
+import it.luncent.cloud_storage.storage.test_data.MinioTestDataProvider;
+import it.luncent.cloud_storage.security.model.UserModel;
+import it.luncent.cloud_storage.security.service.AuthServiceImpl;
+import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
+import it.luncent.cloud_storage.resource.service.ResourceService;
 import org.apache.tika.Tika;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doReturn;
 
 @SpringBootTest
 public class MinioTests {
 
+    @Value("${minio.users-bucket}")
+    private String bucket;
+    @MockitoSpyBean
+    private AuthServiceImpl authService;
     @Autowired
     private MinioClient minioClient;
     @Autowired
-    private StorageService storageService;
+    private ResourceService resourceService;
     @Autowired
     private Tika tika;
 
     @BeforeEach
     void fill() throws Exception {
-        MinioTestDataProvider.fillTestData(storageService);
+        UserModel userModel = new UserModel(1L, "oleg");
+        doReturn(userModel).when(authService).getCurrentUser();
+        MinioTestDataProvider.fillTestData(resourceService, minioClient, bucket);
     }
 
     @AfterEach
-    void clean() {
-        minioTestDataProvider.cleanMinio();
+    void clean() throws Exception {
+        MinioTestDataProvider.cleanMinio(minioClient, bucket);
     }
 
     @Test
-    void testGetFileResourceData(){
-        ResourceMetadataResponse metadataResponse = storageService.getResourceMetadata("diplom/антиплагиатd.pdf");
+    void testCheckExistence() {
+        Iterable<Result<Item>> objects = minioClient.listObjects(
+                ListObjectsArgs.builder()
+                        .bucket(bucket)
+                        .prefix("not existing")
+                        .build()
+        );
+        assertThat(objects).hasSize(1);
+    }
+
+    @Test
+    void testGetFileResourceData() {
+        ResourceMetadataResponse metadataResponse = resourceService.getResourceMetadata("diplom/антиплагиатd.pdf");
         assertThat(metadataResponse.size()).isNotNull();
         assertThat(metadataResponse.path().endsWith("/")).isFalse();
     }
 
     @Test
-    void testGetFolderResourceData(){
-        ResourceMetadataResponse metadataResponse = storageService.getResourceMetadata("diplom/");
+    void testGetFolderResourceData() {
+        ResourceMetadataResponse metadataResponse = resourceService.getResourceMetadata("diplom/");
         assertThat(metadataResponse.size()).isNull();
         assertThat(metadataResponse.path().endsWith("/")).isTrue();
     }

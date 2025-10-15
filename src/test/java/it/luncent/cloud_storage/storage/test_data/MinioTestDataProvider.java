@@ -1,11 +1,17 @@
 
-package it.luncent.cloud_storage.minio.test_data;
+package it.luncent.cloud_storage.storage.test_data;
 
-import it.luncent.cloud_storage.storage.model.request.UploadRequest;
-import it.luncent.cloud_storage.storage.service.StorageService;
-import org.springframework.beans.factory.annotation.Autowired;
+import io.minio.BucketExistsArgs;
+import io.minio.ListObjectsArgs;
+import io.minio.MakeBucketArgs;
+import io.minio.MinioClient;
+import io.minio.RemoveBucketArgs;
+import io.minio.RemoveObjectArgs;
+import io.minio.Result;
+import io.minio.messages.Item;
+import it.luncent.cloud_storage.resource.model.request.UploadRequest;
+import it.luncent.cloud_storage.resource.service.ResourceService;
 import org.springframework.mock.web.MockMultipartFile;
-import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedInputStream;
@@ -16,11 +22,10 @@ import java.io.IOException;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-import static it.luncent.cloud_storage.minio.test_data.MinioConstants.ARCHIVE_PATH;
-import static it.luncent.cloud_storage.minio.test_data.MinioConstants.DIRECTORY_TO_ARCHIVE;
-import static it.luncent.cloud_storage.minio.test_data.MinioConstants.TEST_TARGET_DIRECTORY;
+import static it.luncent.cloud_storage.storage.test_data.MinioConstants.ARCHIVE_PATH;
+import static it.luncent.cloud_storage.storage.test_data.MinioConstants.DIRECTORY_TO_ARCHIVE;
+import static it.luncent.cloud_storage.storage.test_data.MinioConstants.TARGET_DIRECTORY;
 
-//@Component
 public class MinioTestDataProvider {
 
 /*    @Autowired
@@ -44,13 +49,13 @@ public class MinioTestDataProvider {
 
     public static void uploadFile(File file, String targetDirectory, String prefix) throws Exception {
         String contentType = tika.detect(file);
-        String fileName = file.getName();
+        String relativePath = file.getName();
         try (BufferedInputStream bis = new BufferedInputStream(new FileInputStream(file))) {
             minioClient.putObject(
                     PutObjectArgs.builder()
                             .bucket(BUCKET_NAME)
                             .contentType(contentType)
-                            .object(targetDirectory + prefix + fileName)
+                            .object(targetDirectory + prefix + relativePath)
                             .stream(bis, file.length(), -1)
                             .build()
             );
@@ -81,15 +86,65 @@ public class MinioTestDataProvider {
         UploadRequest uploadRequest = new UploadRequest(TEST_TARGET_DIRECTORY, multipartFile);
         resourceService.upload(uploadRequest);
     }*/
+    public static void cleanMinio(MinioClient minioClient, String bucketName) throws Exception {
+        cleanBucket(minioClient, bucketName, null);
+        minioClient.removeBucket(
+                RemoveBucketArgs.builder()
+                        .bucket(bucketName)
+                        .build()
+        );
+    }
 
-    public static void fillTestData(StorageService storageService) throws IOException {
+    public static void cleanBucket(MinioClient minioClient, String bucketName, String directory) throws Exception {
+        Iterable<Result<Item>> objects = minioClient.listObjects(
+                ListObjectsArgs.builder()
+                        .bucket(bucketName)
+                        .prefix(directory)
+                        .build()
+        );
+        for (Result<Item> object : objects){
+            try {
+                String objectName = object.get().objectName();
+                if(objectName.endsWith("/")){
+                    cleanBucket(minioClient, bucketName, objectName);
+                    continue;
+                }
+                minioClient.removeObject(
+                        RemoveObjectArgs.builder()
+                                .bucket(bucketName)
+                                .object(objectName)
+                                .build()
+                );
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
+
+    public static void createBucket(MinioClient minioClient, String bucketName) throws Exception {
+        if (!minioClient.bucketExists(
+                BucketExistsArgs.builder()
+                        .bucket(bucketName)
+                        .build()
+        )) {
+            minioClient.makeBucket(
+                    MakeBucketArgs.builder()
+                            .bucket(bucketName)
+                            .build()
+            );
+        }
+    }
+
+    public static void fillTestData(ResourceService resourceService, MinioClient minioClient, String bucket) throws Exception {
+        createBucket(minioClient, bucket);
         createZipArchive();
-        storageService.upload(createUploadRequest());
+        resourceService.createDirectory(TARGET_DIRECTORY);
+        resourceService.upload(createUploadRequest());
     }
 
     private static UploadRequest createUploadRequest() throws IOException {
         MultipartFile multipartFile = new MockMultipartFile("folder1/", new FileInputStream(ARCHIVE_PATH));
-        return new UploadRequest(TEST_TARGET_DIRECTORY, multipartFile);
+        return new UploadRequest(TARGET_DIRECTORY, multipartFile);
     }
 
     private static void createZipArchive() {

@@ -1,25 +1,24 @@
 package it.luncent.cloud_storage.storage.service;
 
-import it.luncent.cloud_storage.storage.model.request.MoveRenameRequest;
-import it.luncent.cloud_storage.storage.model.request.UploadRequest;
-import it.luncent.cloud_storage.storage.model.response.ResourceMetadataResponse;
+import io.minio.StatObjectResponse;
 
 import java.io.InputStream;
-import java.util.List;
 
+//TODO change parameters and return types
+//TODO remove bucket creation in code do it in docker
 public interface StorageService {
 
-    ResourceMetadataResponse getResourceMetadata(String path);
+    boolean bucketExists(String bucketName);
 
-    List<ResourceMetadataResponse> upload(UploadRequest request);
+    StatObjectResponse getObject(String bucketName, String objectName);
 
-    void deleteResource(String path);
+    void uploadFile(String bucketName, String fileName, InputStream inputStream, String contentType);
 
-    ResourceMetadataResponse moveOrRenameResource(MoveRenameRequest request);
+    void deleteFile(String bucketName, String fileName);
 
-    List<ResourceMetadataResponse> searchResource(String query);
+    InputStream downloadFile(String bucketName, String fileName);
 
-    List<ResourceMetadataResponse> getDirectoryContents(String path);
+    String createEmptyDirectory(String bucketName, String folderName);
 
-    InputStream downloadResource(String path);
+    void checkDirectoryExistence(String bucketName, String folderName);
 }

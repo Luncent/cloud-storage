@@ -1,4 +1,4 @@
-package it.luncent.cloud_storage.storage.model.request;
+package it.luncent.cloud_storage.resource.model.request;
 
 import org.springframework.web.multipart.MultipartFile;
 
