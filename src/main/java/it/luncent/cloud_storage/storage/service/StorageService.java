@@ -1,24 +1,29 @@
 package it.luncent.cloud_storage.storage.service;
 
 import io.minio.StatObjectResponse;
+import io.minio.messages.Item;
+import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 
 import java.io.InputStream;
+import java.util.List;
 
 //TODO change parameters and return types
 //TODO remove bucket creation in code do it in docker
 public interface StorageService {
 
-    boolean bucketExists(String bucketName);
+    void checkDirectoryExistence(ResourcePath directoryPath);
 
-    StatObjectResponse getObject(String bucketName, String objectName);
+    String createEmptyDirectory(ResourcePath directoryPath);
 
-    void uploadFile(String bucketName, String fileName, InputStream inputStream, String contentType);
+    void deleteDirectory(ResourcePath directoryPath);
 
-    void deleteFile(String bucketName, String fileName);
+    void deleteFile(ResourcePath filePath);
 
-    InputStream downloadFile(String bucketName, String fileName);
+    InputStream downloadFile(ResourcePath filePath);
 
-    String createEmptyDirectory(String bucketName, String folderName);
+    StatObjectResponse getObject(ResourcePath objectPath);
 
-    void checkDirectoryExistence(String bucketName, String folderName);
+    void populateWithDirectoryObjects(ResourcePath directoryPath, List<Item> objects);
+
+    void uploadFile(ResourcePath filePath, InputStream inputStream, String contentType);
 }

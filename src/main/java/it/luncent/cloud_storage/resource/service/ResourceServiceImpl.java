@@ -1,28 +1,32 @@
 package it.luncent.cloud_storage.resource.service;
 
-import io.minio.*;
-import it.luncent.cloud_storage.storage.service.StorageService;
-import it.luncent.cloud_storage.security.service.AuthService;
+import io.minio.StatObjectResponse;
+import it.luncent.cloud_storage.resource.exception.DownloadException;
 import it.luncent.cloud_storage.resource.mapper.ResourceMapper;
 import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 import it.luncent.cloud_storage.resource.model.common.UploadingFile;
 import it.luncent.cloud_storage.resource.model.request.MoveRenameRequest;
 import it.luncent.cloud_storage.resource.model.request.UploadRequest;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
+import it.luncent.cloud_storage.resource.util.ResourcePathUtil;
+import it.luncent.cloud_storage.storage.service.ArchiveService;
+import it.luncent.cloud_storage.storage.service.StorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tika.Tika;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import static it.luncent.cloud_storage.storage.util.StorageUtil.isDirectory;
 import static java.util.stream.Collectors.toList;
 
 //TODO rethink exception handling
@@ -31,43 +35,62 @@ import static java.util.stream.Collectors.toList;
 @RequiredArgsConstructor
 @Slf4j
 public class ResourceServiceImpl implements ResourceService {
-    private static final String USER_RESOURCE_PATH_TEMPLATE = "user-%d-files/%s";
-    private static final Long FILE_SIZE_NOT_AVAILABLE = -1L;
-    private static final Long FILE_SIZE_AVAILABLE = -1L;
-    private static final Long MB = 1024L * 1024L;
-
-    private final AuthService authService;
+    private final ResourcePathUtil resourcePathUtil;
     private final ResourceMapper resourceMapper;
     private final Tika tika;
     private final StorageService storageService;
-    @Value("${minio.users-bucket}")
-    private String usersBucket;
+    private final ArchiveService archiveService;
 
-    //TODO think about exception handling (convert minio exceptions)
     @Override
-    public ResourceMetadataResponse getResourceMetadata(String relativePath) {
-        ResourcePath resourcePath = getFullResourcePath(relativePath);
-        if (isDirectory(relativePath)) {
-            storageService.checkDirectoryExistence(usersBucket, resourcePath.full());
-            return resourceMapper.mapToFolderResponse(resourcePath);
-        }
-        StatObjectResponse objectMetadata = storageService.getObject(usersBucket, resourcePath.full());
-        return resourceMapper.mapToFileResponse(resourcePath, objectMetadata);
+    public ResourceMetadataResponse createDirectory(String path) {
+        return getResourceMetadata(createEmptyDirectory(path));
     }
 
     @Override
     public void deleteResource(String path) {
+        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(path);
         if (isDirectory(path)) {
-            deleteDirectory(path);
+            storageService.deleteDirectory(resourcePath);
             return;
         }
-        deleteFile(path);
+        storageService.deleteFile(resourcePath);
     }
 
-    private void deleteDirectory(String path) {
+    @Override
+    public void downloadResource(OutputStream outputStream, String path) {
+        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(path);
+        if (isDirectory(path)) {
+            archiveService.downloadArchive(resourcePath, outputStream);
+            return;//storageService.downloadDirectory(usersBucket, resourcePath);
+        }
+        InputStream fileInputStream = storageService.downloadFile(resourcePath);
+        writeFileInputStreamToOutputStream(fileInputStream, outputStream);
     }
 
-    private void deleteFile(String path) {
+    private void writeFileInputStreamToOutputStream(InputStream fileInputStream, OutputStream outputStream) {
+        try (BufferedInputStream bis = new BufferedInputStream(fileInputStream);
+             BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream)) {
+            bis.transferTo(bufferedOutputStream);
+        } catch (Exception e) {
+            throw new DownloadException(e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public List<ResourceMetadataResponse> getDirectoryContents(String path) {
+        return List.of();
+    }
+
+    //TODO think about exception handling (convert minio exceptions)
+    @Override
+    public ResourceMetadataResponse getResourceMetadata(String relativePath) {
+        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(relativePath);
+        if (isDirectory(relativePath)) {
+            storageService.checkDirectoryExistence(resourcePath);
+            return resourceMapper.mapToFolderResponse(resourcePath.relative());
+        }
+        StatObjectResponse objectMetadata = storageService.getObject(resourcePath);
+        return resourceMapper.mapToFileResponse(resourcePath, objectMetadata);
     }
 
     @Override
@@ -95,31 +118,6 @@ public class ResourceServiceImpl implements ResourceService {
                 .collect(toList());
     }
 
-    @Override
-    public ResourceMetadataResponse createDirectory(String path) {
-        return getResourceMetadata(createEmptyDirectory(path));
-    }
-
-    @Override
-    public List<ResourceMetadataResponse> getDirectoryContents(String path) {
-        return List.of();
-    }
-
-    @Override
-    public InputStream downloadResource(String path) {
-        return null;
-    }
-
-    private ResourcePath getFullResourcePath(String relativePath) {
-        Long currentUserId = authService.getCurrentUser().id();
-        String realPath = String.format(USER_RESOURCE_PATH_TEMPLATE, currentUserId, relativePath);
-        return new ResourcePath(relativePath, realPath);
-    }
-
-    private boolean isDirectory(String path) {
-        return path.endsWith("/");
-    }
-
     private String uploadFileResource(UploadRequest request) {
         try {
             UploadingFile uploadingFile = UploadingFile.withKnownFileSize(request);
@@ -130,18 +128,17 @@ public class ResourceServiceImpl implements ResourceService {
         }
     }
 
-    private String uploadFile(UploadingFile uploadingFile){
-        ResourcePath resourcePath = getFullResourcePath(uploadingFile.relativePath());
+    private String uploadFile(UploadingFile uploadingFile) {
+        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(uploadingFile.relativePath());
         storageService.uploadFile(
-                usersBucket,
-                resourcePath.full(),
+                resourcePath,
                 uploadingFile.inputStream(),
                 uploadingFile.contentType()
         );
         return resourcePath.relative();
     }
 
-    private PutObjectArgs buildPutObjectArgs(UploadingFile uploadingFile, ResourcePath resourcePath) {
+    /*private PutObjectArgs buildPutObjectArgs(UploadingFile uploadingFile, ResourcePath resourcePath) {
         if (uploadingFile.fileSize().isEmpty()) {
             return PutObjectArgs.builder()
                     .bucket(usersBucket)
@@ -156,7 +153,7 @@ public class ResourceServiceImpl implements ResourceService {
                 .contentType(uploadingFile.contentType())
                 .stream(uploadingFile.inputStream(), uploadingFile.fileSize().get(), FILE_SIZE_AVAILABLE)
                 .build();
-    }
+    }*/
 
     private List<String> uploadArchive(UploadRequest request) {
         List<String> uploadedResourcesNames = new ArrayList<>();
@@ -184,7 +181,7 @@ public class ResourceServiceImpl implements ResourceService {
         BufferedInputStream bufferedInputStream = new BufferedInputStream(archiveInputStream);
         String contentType = tika.detect(bufferedInputStream);
         UploadingFile uploadingFile = UploadingFile.withUnKnownFileSize(
-                request.targetDirectory()+entry.getName(),
+                request.targetDirectory() + entry.getName(),
                 contentType,
                 bufferedInputStream
         );
@@ -192,8 +189,8 @@ public class ResourceServiceImpl implements ResourceService {
     }
 
     private String createEmptyDirectory(String path) {
-        ResourcePath resourcePath = getFullResourcePath(path);
-        storageService.createEmptyDirectory(usersBucket, resourcePath.full());
+        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(path);
+        storageService.createEmptyDirectory(resourcePath);
         return resourcePath.relative();
     }
 

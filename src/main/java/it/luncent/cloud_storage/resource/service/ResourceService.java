@@ -5,23 +5,25 @@ import it.luncent.cloud_storage.resource.model.request.UploadRequest;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
 
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.List;
 
 public interface ResourceService {
-
-    ResourceMetadataResponse getResourceMetadata(String path);
-
-    List<ResourceMetadataResponse> upload(UploadRequest request);
 
     ResourceMetadataResponse createDirectory(String path);
 
     void deleteResource(String path);
 
+    void downloadResource(OutputStream outputStream, String path);
+
+    List<ResourceMetadataResponse> getDirectoryContents(String path);
+
+    ResourceMetadataResponse getResourceMetadata(String path);
+
     ResourceMetadataResponse moveOrRenameResource(MoveRenameRequest request);
 
     List<ResourceMetadataResponse> searchResource(String query);
 
-    List<ResourceMetadataResponse> getDirectoryContents(String path);
-
-    InputStream downloadResource(String path);
+    //TODO temporary file max size. Why we need to set it. Check file name before upload, maybe add more symbols for correct path regexp
+    List<ResourceMetadataResponse> upload(UploadRequest request);
 }

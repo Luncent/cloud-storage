@@ -6,8 +6,10 @@ import io.minio.ListObjectsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.RemoveBucketArgs;
-import io.minio.RemoveObjectArgs;
+import io.minio.RemoveObjectsArgs;
 import io.minio.Result;
+import io.minio.messages.DeleteError;
+import io.minio.messages.DeleteObject;
 import io.minio.messages.Item;
 import it.luncent.cloud_storage.resource.model.request.UploadRequest;
 import it.luncent.cloud_storage.resource.service.ResourceService;
@@ -19,6 +21,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -87,7 +91,9 @@ public class MinioTestDataProvider {
         resourceService.upload(uploadRequest);
     }*/
     public static void cleanMinio(MinioClient minioClient, String bucketName) throws Exception {
-        cleanBucket(minioClient, bucketName, null);
+        List<String> objectNames = new ArrayList<>();
+        collectDirectoryObjectsNames(minioClient, bucketName, "", objectNames);
+        deleteObjectsBatch(minioClient, bucketName, objectNames);
         minioClient.removeBucket(
                 RemoveBucketArgs.builder()
                         .bucket(bucketName)
@@ -95,30 +101,39 @@ public class MinioTestDataProvider {
         );
     }
 
-    public static void cleanBucket(MinioClient minioClient, String bucketName, String directory) throws Exception {
+    public static void collectDirectoryObjectsNames(MinioClient minioClient, String bucketName, String directory, List<String> objectNames) throws Exception {
         Iterable<Result<Item>> objects = minioClient.listObjects(
                 ListObjectsArgs.builder()
                         .bucket(bucketName)
                         .prefix(directory)
                         .build()
         );
-        for (Result<Item> object : objects){
+        for (Result<Item> object : objects) {
             try {
-                String objectName = object.get().objectName();
-                if(objectName.endsWith("/")){
-                    cleanBucket(minioClient, bucketName, objectName);
+                Item objectItem = object.get();
+                String objectName = objectItem.objectName();
+                if (objectName.endsWith("/")) {
+                    collectDirectoryObjectsNames(minioClient, bucketName, objectName, objectNames);
                     continue;
                 }
-                minioClient.removeObject(
-                        RemoveObjectArgs.builder()
-                                .bucket(bucketName)
-                                .object(objectName)
-                                .build()
-                );
+                objectNames.add(objectName);
             } catch (Exception e) {
                 throw new RuntimeException(e);
             }
         }
+    }
+
+    private static void deleteObjectsBatch(MinioClient minioClient, String bucketName, List<String> objectNames) {
+        List<DeleteObject> deleteObjects = objectNames.stream()
+                .map(DeleteObject::new)
+                .toList();
+        Iterable<Result<DeleteError>> results = minioClient.removeObjects(
+                RemoveObjectsArgs.builder()
+                        .bucket(bucketName)
+                        .objects(deleteObjects)
+                        .build()
+        );
+        results.forEach(result -> {});
     }
 
     public static void createBucket(MinioClient minioClient, String bucketName) throws Exception {

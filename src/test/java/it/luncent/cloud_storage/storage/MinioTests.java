@@ -44,7 +44,7 @@ public class MinioTests {
 
     @AfterEach
     void clean() throws Exception {
-        MinioTestDataProvider.cleanMinio(minioClient, bucket);
+        //MinioTestDataProvider.cleanMinio(minioClient, bucket);
     }
 
     @Test
