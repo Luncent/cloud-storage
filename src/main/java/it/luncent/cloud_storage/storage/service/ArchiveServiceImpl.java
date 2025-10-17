@@ -25,6 +25,7 @@ public class ArchiveServiceImpl implements ArchiveService {
     private final StorageService storageService;
     private final ResourcePathUtil resourcePathUtil;
 
+    //TODO add check for existence
     @Override
     public void downloadArchive(ResourcePath zippedDirectoryPath, OutputStream outputStream) {
         try(ZipOutputStream zipOutputStream = new ZipOutputStream(outputStream)){
@@ -35,7 +36,7 @@ public class ArchiveServiceImpl implements ArchiveService {
                 String absolutePath = item.objectName();
                 ResourcePath resourcePath = resourcePathUtil.getResourcePathFromAbsolute(absolutePath);
 
-                ZipEntry zipEntry = new ZipEntry(getZipEntryRelativePath(absolutePath, zippedDirectoryPath.full()));
+                ZipEntry zipEntry = new ZipEntry(getZipEntryRelativePath(absolutePath, zippedDirectoryPath.absolute()));
                 zipOutputStream.putNextEntry(zipEntry);
                 if(isDirectory(absolutePath)) {
                     zipOutputStream.closeEntry();
@@ -53,9 +54,10 @@ public class ArchiveServiceImpl implements ArchiveService {
 
     //TODO повторяющийся метод как и в ResourceService
     private void writeFileInputStreamToOutputStream(InputStream fileInputStream, OutputStream outputStream) {
-        try (BufferedInputStream bis = new BufferedInputStream(fileInputStream);
-             BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream)) {
+        try (BufferedInputStream bis = new BufferedInputStream(fileInputStream)) {
+            BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
             bis.transferTo(bufferedOutputStream);
+            bufferedOutputStream.flush();
         } catch (Exception e) {
             throw new DownloadException(e.getMessage(), e);
         }

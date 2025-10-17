@@ -1,4 +1,4 @@
-package it.luncent.cloud_storage.config.properties;
+package it.luncent.cloud_storage.storage.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 

@@ -61,8 +61,9 @@ public class ResourceServiceImpl implements ResourceService {
         ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(path);
         if (isDirectory(path)) {
             archiveService.downloadArchive(resourcePath, outputStream);
-            return;//storageService.downloadDirectory(usersBucket, resourcePath);
+            return;
         }
+        //TODO add check for existence
         InputStream fileInputStream = storageService.downloadFile(resourcePath);
         writeFileInputStreamToOutputStream(fileInputStream, outputStream);
     }
@@ -142,14 +143,14 @@ public class ResourceServiceImpl implements ResourceService {
         if (uploadingFile.fileSize().isEmpty()) {
             return PutObjectArgs.builder()
                     .bucket(usersBucket)
-                    .object(resourcePath.full())
+                    .object(resourcePath.absolute())
                     .contentType(uploadingFile.contentType())
                     .stream(uploadingFile.inputStream(), FILE_SIZE_NOT_AVAILABLE, 10 * MB)
                     .build();
         }
         return PutObjectArgs.builder()
                 .bucket(usersBucket)
-                .object(resourcePath.full())
+                .object(resourcePath.absolute())
                 .contentType(uploadingFile.contentType())
                 .stream(uploadingFile.inputStream(), uploadingFile.fileSize().get(), FILE_SIZE_AVAILABLE)
                 .build();

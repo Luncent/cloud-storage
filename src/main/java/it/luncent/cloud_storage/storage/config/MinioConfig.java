@@ -1,7 +1,7 @@
-package it.luncent.cloud_storage.config;
+package it.luncent.cloud_storage.storage.config;
 
 import io.minio.MinioClient;
-import it.luncent.cloud_storage.config.properties.MinioProperties;
+import okhttp3.OkHttpClient;
 import org.apache.tika.Tika;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -12,10 +12,15 @@ import org.springframework.context.annotation.Configuration;
 public class MinioConfig {
 
     @Bean
-    public MinioClient minioClient(MinioProperties minioProperties) {
+    public MinioClient minioClient(MinioProperties minioProperties, MinioLoggingInterceptor minioLoggingInterceptor) {
+        OkHttpClient httpClient = new OkHttpClient.Builder()
+                .addInterceptor(minioLoggingInterceptor)
+                .build();
+
         return MinioClient.builder()
                 .endpoint(minioProperties.endpoint())
                 .credentials(minioProperties.username(), minioProperties.password())
+                .httpClient(httpClient)
                 .build();
     }
 
