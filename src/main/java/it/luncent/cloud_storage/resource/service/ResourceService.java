@@ -1,10 +1,9 @@
 package it.luncent.cloud_storage.resource.service;
 
-import it.luncent.cloud_storage.resource.model.request.MoveRenameRequest;
+import it.luncent.cloud_storage.resource.model.request.MoveRequest;
 import it.luncent.cloud_storage.resource.model.request.UploadRequest;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
 
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.List;
 
@@ -20,7 +19,7 @@ public interface ResourceService {
 
     ResourceMetadataResponse getResourceMetadata(String path);
 
-    ResourceMetadataResponse moveOrRenameResource(MoveRenameRequest request);
+    ResourceMetadataResponse moveResource(MoveRequest request);
 
     List<ResourceMetadataResponse> searchResource(String query);
 

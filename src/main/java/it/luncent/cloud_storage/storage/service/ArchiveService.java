@@ -8,4 +8,5 @@ public interface ArchiveService {
 
     void downloadArchive(ResourcePath path, OutputStream outputStream);
 
+    void downloadArchiveAsync(ResourcePath zippedDirectoryPath, OutputStream outputStream);
 }

@@ -4,6 +4,7 @@ import io.minio.messages.Item;
 import it.luncent.cloud_storage.resource.exception.DownloadException;
 import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 import it.luncent.cloud_storage.resource.util.ResourcePathUtil;
+import it.luncent.cloud_storage.storage.exception.ResourceNotFoundException;
 import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -32,14 +33,13 @@ public class ArchiveServiceImpl implements ArchiveService {
     private final ResourcePathUtil resourcePathUtil;
     private final ExecutorService executor;
 
-    //TODO add check for existence
     @Override
     public void downloadArchive(ResourcePath zippedDirectoryPath, OutputStream outputStream) {
         try (ZipOutputStream zipOutputStream = new ZipOutputStream(outputStream)) {
             List<Item> objects = new ArrayList<>();
             storageService.populateWithDirectoryObjects(zippedDirectoryPath, objects);
-            for (Item item : objects) {
 
+            for (Item item : objects) {
                 String absolutePath = item.objectName();
                 ResourcePath resourcePath = resourcePathUtil.getResourcePathFromAbsolute(absolutePath);
 
@@ -54,18 +54,22 @@ public class ArchiveServiceImpl implements ArchiveService {
                 writeFileInputStreamToOutputStream(inputStream, zipOutputStream);
                 zipOutputStream.closeEntry();
             }
+        } catch (ResourceNotFoundException ex) {
+            throw ex;
         } catch (Exception e) {
             throw new DownloadException(e.getMessage(), e);
         }
     }
 
+    @Override
     public void downloadArchiveAsync(ResourcePath zippedDirectoryPath, OutputStream outputStream) {
-        try (ZipOutputStream zipOutputStream = new ZipOutputStream(outputStream)) {
-            List<Item> objects = new ArrayList<>();
-            storageService.populateWithDirectoryObjects(zippedDirectoryPath, objects);
-            LinkedList<ResourcePath> downloadingFilesPaths = new LinkedList<>();
-            for (Item item : objects) {
+        List<Item> objects = new ArrayList<>();
+        storageService.populateWithDirectoryObjectsAsync(zippedDirectoryPath, objects);
 
+        try (ZipOutputStream zipOutputStream = new ZipOutputStream(outputStream)) {
+            LinkedList<ResourcePath> downloadingFilesPaths = new LinkedList<>();
+
+            for (Item item : objects) {
                 String absolutePath = item.objectName();
                 ResourcePath resourcePath = resourcePathUtil.getResourcePathFromAbsolute(absolutePath);
                 if (isDirectory(absolutePath)) {
@@ -77,25 +81,31 @@ public class ArchiveServiceImpl implements ArchiveService {
                 downloadingFilesPaths.add(resourcePath);
             }
 
-            CountDownLatch countDownLatch = new CountDownLatch(downloadingFilesPaths.size());
-            List<GetFileInputStreamCallable> getFilesInputStreamsTasks = downloadingFilesPaths.stream()
-                    .map(fileToDownload -> new GetFileInputStreamCallable(fileToDownload, countDownLatch))
-                    .toList();
-            List<Future<InputStream>> filesInputStreamsFutures = executor.invokeAll(getFilesInputStreamsTasks);
-            countDownLatch.await();
+            List<Future<InputStream>> filesInputStreamsFutures = executeGetFilesInputStreamsTasks(downloadingFilesPaths);
 
-            for(Future<InputStream> futureInputStream : filesInputStreamsFutures) {
+            for (Future<InputStream> futureInputStream : filesInputStreamsFutures) {
                 ZipEntry zipEntry = new ZipEntry(getResourceRelativePath(downloadingFilesPaths.pop().absolute(), zippedDirectoryPath.absolute()));
                 zipOutputStream.putNextEntry(zipEntry);
                 writeFileInputStreamToOutputStream(futureInputStream.get(), zipOutputStream);
                 zipOutputStream.closeEntry();
             }
+        } catch (ResourceNotFoundException ex) {
+            throw ex;
         } catch (Exception e) {
             throw new DownloadException(e.getMessage(), e);
         }
     }
 
-    //TODO повторяющийся метод как и в ResourceService
+    private List<Future<InputStream>> executeGetFilesInputStreamsTasks(LinkedList<ResourcePath> downloadingFilesPaths) throws InterruptedException {
+        CountDownLatch countDownLatch = new CountDownLatch(downloadingFilesPaths.size());
+        List<GetFileInputStreamCallable> getFilesInputStreamsTasks = downloadingFilesPaths.stream()
+                .map(fileToDownload -> new GetFileInputStreamCallable(fileToDownload, countDownLatch))
+                .toList();
+        List<Future<InputStream>> filesInputStreamsFutures = executor.invokeAll(getFilesInputStreamsTasks);
+        countDownLatch.await();
+        return filesInputStreamsFutures;
+    }
+
     private void writeFileInputStreamToOutputStream(InputStream fileInputStream, OutputStream outputStream) {
         try (BufferedInputStream bis = new BufferedInputStream(fileInputStream)) {
             BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);

@@ -1,9 +1,16 @@
 package it.luncent.cloud_storage.storage;
 
+import io.minio.CopyObjectArgs;
+import io.minio.CopySource;
 import io.minio.ListObjectsArgs;
 import io.minio.MinioClient;
+import io.minio.RemoveObjectArgs;
 import io.minio.Result;
+import io.minio.errors.ErrorResponseException;
 import io.minio.messages.Item;
+import it.luncent.cloud_storage.resource.model.common.ResourcePath;
+import it.luncent.cloud_storage.resource.model.request.MoveRequest;
+import it.luncent.cloud_storage.storage.service.StorageService;
 import it.luncent.cloud_storage.storage.test_data.MinioTestDataProvider;
 import it.luncent.cloud_storage.security.model.UserModel;
 import it.luncent.cloud_storage.security.service.AuthServiceImpl;
@@ -34,6 +41,8 @@ public class MinioTests {
     private ResourceService resourceService;
     @Autowired
     private Tika tika;
+    @Autowired
+    private StorageService storageService;
 
     @BeforeEach
     void fill() throws Exception {
@@ -171,10 +180,21 @@ public class MinioTests {
             }
             e.printStackTrace();
         }
-    }
+    }*/
 
     @Test
-    void renameOrMoveFile() throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
+    void renameOrMoveFile() throws Exception {
+        String resourcePath = "test_folder/folder1/nested2/";
+        String newPath = "test_folder/folder2/nested3/";
+        MoveRequest moveRequest = new MoveRequest(resourcePath, newPath);
+
+        if(!validate(moveRequest)){
+            throw new AssertionError("Invalid MoveRequest");
+        }
+
+        /*ResourcePath relativePath = new ResourcePath(resourcePath, bucket);
+        storageService.populateWithDirectoryObjectsAsync();*/
+
         try {
             minioClient.copyObject(
                     CopyObjectArgs.builder()
@@ -200,6 +220,12 @@ public class MinioTests {
         }
     }
 
+    private boolean validate(MoveRequest moveRequest) {
+        boolean bothAreDirectories = moveRequest.to().endsWith("/") && moveRequest.from().endsWith("/");
+        boolean bothAreFiles = !moveRequest.to().endsWith("/") && !moveRequest.from().endsWith("/");
+        return bothAreDirectories || bothAreFiles;
+    }
+    /*
     private void printFolderContent(String bucket, String prefix) throws ServerException, InsufficientDataException, ErrorResponseException, IOException, NoSuchAlgorithmException, InvalidKeyException, InvalidResponseException, XmlParserException, InternalException {
         System.out.println("-------------------DIR-----------------");
 

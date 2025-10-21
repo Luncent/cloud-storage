@@ -1,11 +1,13 @@
 package it.luncent.cloud_storage.resource.service;
 
+import io.minio.Result;
 import io.minio.StatObjectResponse;
+import io.minio.messages.Item;
 import it.luncent.cloud_storage.resource.exception.DownloadException;
 import it.luncent.cloud_storage.resource.mapper.ResourceMapper;
 import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 import it.luncent.cloud_storage.resource.model.common.UploadingFile;
-import it.luncent.cloud_storage.resource.model.request.MoveRenameRequest;
+import it.luncent.cloud_storage.resource.model.request.MoveRequest;
 import it.luncent.cloud_storage.resource.model.request.UploadRequest;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
 import it.luncent.cloud_storage.resource.util.ResourcePathUtil;
@@ -43,7 +45,7 @@ public class ResourceServiceImpl implements ResourceService {
 
     @Override
     public ResourceMetadataResponse createDirectory(String path) {
-        return getResourceMetadata(createEmptyDirectory(path));
+        return getResourceMetadata(createEmptyDirectory(resourcePathUtil.getResourcePathFromRelative(path)));
     }
 
     @Override
@@ -60,7 +62,7 @@ public class ResourceServiceImpl implements ResourceService {
     public void downloadResource(OutputStream outputStream, String path) {
         ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(path);
         if (isDirectory(path)) {
-            archiveService.downloadArchive(resourcePath, outputStream);
+            archiveService.downloadArchiveAsync(resourcePath, outputStream);
             return;
         }
         //TODO add check for existence
@@ -87,16 +89,31 @@ public class ResourceServiceImpl implements ResourceService {
     public ResourceMetadataResponse getResourceMetadata(String relativePath) {
         ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(relativePath);
         if (isDirectory(relativePath)) {
-            storageService.checkDirectoryExistence(resourcePath);
             return resourceMapper.mapToFolderResponse(resourcePath.relative());
         }
         StatObjectResponse objectMetadata = storageService.getObject(resourcePath);
         return resourceMapper.mapToFileResponse(resourcePath, objectMetadata);
     }
 
+    //TODO add validation on controller level
     @Override
-    public ResourceMetadataResponse moveOrRenameResource(MoveRenameRequest request) {
+    public ResourceMetadataResponse moveResource(MoveRequest request) {
+        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(request.from());
+
+        if(isDirectory(request.from())) {
+            Iterable<Result<Item>> objects = storageService.getDirectoryContent(resourcePath);
+            moveDirectory(objects, resourcePath, request);
+            return null;
+        }
+
+
+
         return null;
+    }
+
+    private void moveDirectory(Iterable<Result<Item>> objects, ResourcePath resourcePath, MoveRequest request) {
+        ResourcePath newFolderPath = resourcePathUtil.getResourcePathFromRelative(request.to());
+        createEmptyDirectory(newFolderPath);
     }
 
     @Override
@@ -164,7 +181,7 @@ public class ResourceServiceImpl implements ResourceService {
             ZipEntry entry;
             while ((entry = zis.getNextEntry()) != null) {
                 if (entry.isDirectory()) {
-                    uploadedResourcesNames.add(createEmptyDirectory(request.targetDirectory() + entry.getName()));
+                    uploadedResourcesNames.add(createEmptyDirectory(resourcePathUtil.getResourcePathFromRelative(request.targetDirectory() + entry.getName())));
                     zis.closeEntry();
                     continue;
                 }
@@ -189,10 +206,9 @@ public class ResourceServiceImpl implements ResourceService {
         return uploadFile(uploadingFile);
     }
 
-    private String createEmptyDirectory(String path) {
-        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(path);
-        storageService.createEmptyDirectory(resourcePath);
-        return resourcePath.relative();
+    private String createEmptyDirectory(ResourcePath path) {
+        storageService.createEmptyDirectory(path);
+        return path.relative();
     }
 
     private boolean isArchive(UploadRequest request) {

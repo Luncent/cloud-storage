@@ -52,29 +52,6 @@ public class StorageServiceImpl implements StorageService {
     private final ResourcePathUtil resourcePathUtil;
     private final ForkJoinPool forkJoinPool;
 
-
-    @Override
-    public void checkDirectoryExistence(ResourcePath directoryPath) {
-        try {
-            Iterable<Result<Item>> objects = minioClient.listObjects(
-                    ListObjectsArgs.builder()
-                            .bucket(directoryPath.bucketName())
-                            .prefix(directoryPath.absolute())
-                            .build()
-            );
-            objects.iterator().next().get();
-        } catch (ErrorResponseException ex) {
-            if (ex.response().code() == 404) {
-                throw new ResourceNotFoundException(format(FOLDER_NOT_FOUND_TEMPLATE, directoryPath.relative()), ex);
-            }
-            throw new StorageException(ex.getMessage(), ex);
-        } catch (NoSuchElementException ex) {
-            throw new ResourceNotFoundException(format(FOLDER_NOT_FOUND_TEMPLATE, directoryPath.relative()), ex);
-        } catch (Exception ex) {
-            throw new StorageException(ex.getMessage(), ex);
-        }
-    }
-
     @Override
     public String createEmptyDirectory(ResourcePath directoryPath) {
         try {
@@ -93,9 +70,8 @@ public class StorageServiceImpl implements StorageService {
 
     @Override
     public void deleteDirectory(ResourcePath directoryPath) {
-        checkDirectoryExistence(directoryPath);
         List<Item> objects = new ArrayList<>();
-        populateWithDirectoryObjects(directoryPath, objects, false);
+        populateWithDirectoryObjectsAsync(directoryPath, objects, false);
         List<String> objectNames = objects.stream()
                 .map(Item::objectName)
                 .toList();
@@ -133,6 +109,29 @@ public class StorageServiceImpl implements StorageService {
     }
 
     @Override
+    public Iterable<Result<Item>> getDirectoryContent(ResourcePath directoryPath) {
+        try {
+            Iterable<Result<Item>> objects = minioClient.listObjects(
+                    ListObjectsArgs.builder()
+                            .bucket(directoryPath.bucketName())
+                            .prefix(directoryPath.absolute())
+                            .build()
+            );
+            objects.iterator().next().get();
+            return objects;
+        } catch (ErrorResponseException ex) {
+            if (ex.response().code() == 404) {
+                throw new ResourceNotFoundException(format(FOLDER_NOT_FOUND_TEMPLATE, directoryPath.relative()), ex);
+            }
+            throw new StorageException(ex.getMessage(), ex);
+        } catch (NoSuchElementException ex) {
+            throw new ResourceNotFoundException(format(FOLDER_NOT_FOUND_TEMPLATE, directoryPath.relative()), ex);
+        } catch (Exception ex) {
+            throw new StorageException(ex.getMessage(), ex);
+        }
+    }
+
+    @Override
     public StatObjectResponse getObject(ResourcePath objectPath) {
         checkRequestedPathForEmptyDirectoryTag(objectPath);
         try {
@@ -154,7 +153,11 @@ public class StorageServiceImpl implements StorageService {
 
     @Override
     public void populateWithDirectoryObjects(ResourcePath directoryPath, List<Item> objects) {
-        //populateWithDirectoryObjects(directoryPath, objects, true);
+        populateWithDirectoryObjects(directoryPath, objects, true);
+    }
+
+    @Override
+    public void populateWithDirectoryObjectsAsync(ResourcePath directoryPath, List<Item> objects) {
         populateWithDirectoryObjectsAsync(directoryPath, objects, true);
     }
 
@@ -197,13 +200,7 @@ public class StorageServiceImpl implements StorageService {
 
     private void populateWithDirectoryObjects(ResourcePath directoryPath, List<Item> objects, boolean skipDirectoryMarkingFile) {
         try {
-            //TODO проверить сколько запросов по сети идет, распаралелить
-            Iterable<Result<Item>> results = minioClient.listObjects(
-                    ListObjectsArgs.builder()
-                            .bucket(directoryPath.bucketName())
-                            .prefix(directoryPath.absolute())
-                            .build()
-            );
+            Iterable<Result<Item>> results = getDirectoryContent(directoryPath);
             for (Result<Item> result : results) {
                 Item object = result.get();
                 String objectName = object.objectName();
@@ -217,6 +214,8 @@ public class StorageServiceImpl implements StorageService {
                     objects.add(object);
                 }
             }
+        } catch (ResourceNotFoundException ex) {
+            throw ex;
         } catch (Exception ex) {
             throw new StorageException(ex.getMessage(), ex);
         }
@@ -227,8 +226,6 @@ public class StorageServiceImpl implements StorageService {
         forkJoinPool.invoke(extractionAction);
     }
 
-    //минио и так быстро работает, тут нету скачивания даже может и излишне паралелить,
-    // хотя проверял с локальным минио может из-за этого разница не такая большая + кол-во папок влияет
     private class ConcurrentObjectsExtractionAction extends RecursiveAction {
 
         private final ResourcePath directoryPath;
@@ -244,33 +241,30 @@ public class StorageServiceImpl implements StorageService {
         @Override
         protected void compute() {
             try {
-                Iterable<Result<Item>> directoryObjects = minioClient.listObjects(
-                        ListObjectsArgs.builder()
-                                .bucket(directoryPath.bucketName())
-                                .prefix(directoryPath.absolute())
-                                .build()
-                );
-                List<ResourcePath> nestedDirectories = new ArrayList<>();
+                Iterable<Result<Item>> directoryObjects = getDirectoryContent(directoryPath);
+                List<ResourcePath> nestedDirectoriesPaths = new ArrayList<>();
                 for (Result<Item> directoryObject : directoryObjects) {
                     Item object = directoryObject.get();
                     String objectName = object.objectName();
                     if (isDirectory(objectName)) {
-                        nestedDirectories.add(resourcePathUtil.getResourcePathFromAbsolute(objectName));
+                        nestedDirectoriesPaths.add(resourcePathUtil.getResourcePathFromAbsolute(objectName));
                         continue;
                     }
-                    if (isSkipDirectoryMarkingFile(skipDirectoryMarkingFile, objectName)) {
+                    if (skipFile(skipDirectoryMarkingFile, objectName)) {
                         continue;
                     }
                     log.debug("adding file thread {}", Thread.currentThread().getName());
                     objects.add(object);
                 }
-                startRecursiveActions(nestedDirectories);
+                startRecursiveActions(nestedDirectoriesPaths);
+            } catch (ResourceNotFoundException ex) {
+                throw ex;
             } catch (Exception ex) {
                 throw new StorageException(ex.getMessage(), ex);
             }
         }
 
-        private boolean isSkipDirectoryMarkingFile(boolean skipDirectoryMarkingFile, String objectName) {
+        private boolean skipFile(boolean skipDirectoryMarkingFile, String objectName) {
             return skipDirectoryMarkingFile && objectName.endsWith(EMPTY_DIRECTORY_TAG);
         }
 

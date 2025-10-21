@@ -1,5 +1,6 @@
 package it.luncent.cloud_storage.storage.service;
 
+import io.minio.Result;
 import io.minio.StatObjectResponse;
 import io.minio.messages.Item;
 import it.luncent.cloud_storage.resource.model.common.ResourcePath;
@@ -11,8 +12,6 @@ import java.util.List;
 //TODO remove bucket creation in code do it in docker
 public interface StorageService {
 
-    void checkDirectoryExistence(ResourcePath directoryPath);
-
     String createEmptyDirectory(ResourcePath directoryPath);
 
     void deleteDirectory(ResourcePath directoryPath);
@@ -21,9 +20,13 @@ public interface StorageService {
 
     InputStream downloadFile(ResourcePath filePath);
 
+    Iterable<Result<Item>> getDirectoryContent(ResourcePath directoryPath);
+
     StatObjectResponse getObject(ResourcePath objectPath);
 
     void populateWithDirectoryObjects(ResourcePath directoryPath, List<Item> objects);
+
+    void populateWithDirectoryObjectsAsync(ResourcePath directoryPath, List<Item> objects);
 
     void uploadFile(ResourcePath filePath, InputStream inputStream, String contentType);
 }
