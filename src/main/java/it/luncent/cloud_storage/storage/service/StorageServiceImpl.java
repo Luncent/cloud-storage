@@ -1,5 +1,7 @@
 package it.luncent.cloud_storage.storage.service;
 
+import io.minio.CopyObjectArgs;
+import io.minio.CopySource;
 import io.minio.GetObjectArgs;
 import io.minio.ListObjectsArgs;
 import io.minio.MinioClient;
@@ -41,6 +43,7 @@ import static java.lang.String.format;
 public class StorageServiceImpl implements StorageService {
 
     private static final String FOLDER_NOT_FOUND_TEMPLATE = "folder %s not found";
+    private static final String OBJECT_NOT_FOUND_TEMPLATE = "object %s not found";
     private static final String EMPTY_DIRECTORY_TAG = "empty-folder-tag";
     private static final Integer FILE_SIZE_NOT_KNOWN = -1;
     private static final Integer FILE_SIZE_IS_KNOWN = -1;
@@ -63,6 +66,31 @@ public class StorageServiceImpl implements StorageService {
                             .build()
             );
             return response.object();
+        } catch (Exception ex) {
+            throw new StorageException(ex.getMessage(), ex);
+        }
+    }
+
+    @Override
+    public ObjectWriteResponse copyObject(ResourcePath from, ResourcePath to) {
+        try {
+            return minioClient.copyObject(
+                    CopyObjectArgs.builder()
+                            .source(
+                                    CopySource.builder()
+                                            .bucket(from.bucketName())
+                                            .object(from.absolute())
+                                            .build()
+                            )
+                            .bucket(to.bucketName())
+                            .object(to.absolute())
+                            .build()
+            );
+        } catch (ErrorResponseException ex) {
+            if (ex.response().code() == 404) {
+                throw new ResourceNotFoundException(format(OBJECT_NOT_FOUND_TEMPLATE, from.relative()), ex);
+            }
+            throw new StorageException(ex.getMessage(), ex);
         } catch (Exception ex) {
             throw new StorageException(ex.getMessage(), ex);
         }
@@ -132,7 +160,7 @@ public class StorageServiceImpl implements StorageService {
     }
 
     @Override
-    public StatObjectResponse getObject(ResourcePath objectPath) {
+    public StatObjectResponse getObjectMetadata(ResourcePath objectPath) {
         checkRequestedPathForEmptyDirectoryTag(objectPath);
         try {
             return minioClient.statObject(

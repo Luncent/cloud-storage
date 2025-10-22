@@ -89,9 +89,10 @@ public class ResourceServiceImpl implements ResourceService {
     public ResourceMetadataResponse getResourceMetadata(String relativePath) {
         ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(relativePath);
         if (isDirectory(relativePath)) {
+            storageService.getDirectoryContent(resourcePath);
             return resourceMapper.mapToFolderResponse(resourcePath.relative());
         }
-        StatObjectResponse objectMetadata = storageService.getObject(resourcePath);
+        StatObjectResponse objectMetadata = storageService.getObjectMetadata(resourcePath);
         return resourceMapper.mapToFileResponse(resourcePath, objectMetadata);
     }
 
@@ -105,8 +106,6 @@ public class ResourceServiceImpl implements ResourceService {
             moveDirectory(objects, resourcePath, request);
             return null;
         }
-
-
 
         return null;
     }

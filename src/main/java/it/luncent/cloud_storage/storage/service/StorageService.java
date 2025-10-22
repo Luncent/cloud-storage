@@ -1,5 +1,6 @@
 package it.luncent.cloud_storage.storage.service;
 
+import io.minio.ObjectWriteResponse;
 import io.minio.Result;
 import io.minio.StatObjectResponse;
 import io.minio.messages.Item;
@@ -14,6 +15,8 @@ public interface StorageService {
 
     String createEmptyDirectory(ResourcePath directoryPath);
 
+    ObjectWriteResponse copyObject(ResourcePath from, ResourcePath to);
+
     void deleteDirectory(ResourcePath directoryPath);
 
     void deleteFile(ResourcePath filePath);
@@ -22,7 +25,7 @@ public interface StorageService {
 
     Iterable<Result<Item>> getDirectoryContent(ResourcePath directoryPath);
 
-    StatObjectResponse getObject(ResourcePath objectPath);
+    StatObjectResponse getObjectMetadata(ResourcePath objectPath);
 
     void populateWithDirectoryObjects(ResourcePath directoryPath, List<Item> objects);
 
