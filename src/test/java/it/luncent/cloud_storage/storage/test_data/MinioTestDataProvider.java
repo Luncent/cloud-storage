@@ -153,7 +153,7 @@ public class MinioTestDataProvider {
     public static void fillTestData(ResourceService resourceService, MinioClient minioClient, String bucket) throws Exception {
         createBucket(minioClient, bucket);
         createZipArchive();
-        resourceService.createDirectory(TARGET_DIRECTORY);
+        resourceService.createEmptyDirectory(TARGET_DIRECTORY);
         resourceService.upload(createUploadRequest());
     }
 

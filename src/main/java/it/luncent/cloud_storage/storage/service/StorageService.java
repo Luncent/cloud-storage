@@ -4,6 +4,7 @@ import io.minio.ObjectWriteResponse;
 import io.minio.Result;
 import io.minio.StatObjectResponse;
 import io.minio.messages.Item;
+import it.luncent.cloud_storage.common.constants.PopulationFilter;
 import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 
 import java.io.InputStream;
@@ -27,9 +28,9 @@ public interface StorageService {
 
     StatObjectResponse getObjectMetadata(ResourcePath objectPath);
 
-    void populateWithDirectoryObjects(ResourcePath directoryPath, List<Item> objects);
+    void populateWithDirectoryObjects(ResourcePath directoryPath, List<Item> objects, PopulationFilter populationFilter);
 
-    void populateWithDirectoryObjectsAsync(ResourcePath directoryPath, List<Item> objects);
+    void populateWithDirectoryObjectsAsync(ResourcePath directoryPath, List<Item> objects, PopulationFilter populationFilter);
 
     void uploadFile(ResourcePath filePath, InputStream inputStream, String contentType);
 }

@@ -9,7 +9,7 @@ import java.util.List;
 
 public interface ResourceService {
 
-    ResourceMetadataResponse createDirectory(String path);
+    ResourceMetadataResponse createEmptyDirectory(String path);
 
     void deleteResource(String path);
 

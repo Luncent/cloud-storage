@@ -26,6 +26,21 @@ public class ResourcePathUtil {
     }
 
     public ResourcePath getResourcePathFromAbsolute(String absolutePath) {
-        return new ResourcePath(null, absolutePath, usersBucket);
+        return new ResourcePath(getRelativePath(absolutePath), absolutePath, usersBucket);
+    }
+
+    public ResourcePath concurrentGetPathFromAbsolute(String absolutePath, Long userId) {
+        return new ResourcePath(getRelativePathConcurrent(absolutePath, userId), absolutePath, usersBucket);
+    }
+
+    public String getRelativePath(String absolutePath) {
+        Long currentUserId = authService.getCurrentUser().id();
+        String userContextPrefix = String.format(USER_RESOURCE_PATH_TEMPLATE, currentUserId, "");
+        return absolutePath.substring(userContextPrefix.length());
+    }
+
+    public String getRelativePathConcurrent(String absolutePath, Long userId) {
+        String userContextPrefix = String.format(USER_RESOURCE_PATH_TEMPLATE, userId, "");
+        return absolutePath.substring(userContextPrefix.length());
     }
 }

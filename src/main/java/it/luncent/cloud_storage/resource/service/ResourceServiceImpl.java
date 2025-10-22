@@ -3,7 +3,9 @@ package it.luncent.cloud_storage.resource.service;
 import io.minio.Result;
 import io.minio.StatObjectResponse;
 import io.minio.messages.Item;
+import it.luncent.cloud_storage.common.constants.PopulationFilter;
 import it.luncent.cloud_storage.resource.exception.DownloadException;
+import it.luncent.cloud_storage.resource.exception.MoveConflictException;
 import it.luncent.cloud_storage.resource.mapper.ResourceMapper;
 import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 import it.luncent.cloud_storage.resource.model.common.UploadingFile;
@@ -11,6 +13,7 @@ import it.luncent.cloud_storage.resource.model.request.MoveRequest;
 import it.luncent.cloud_storage.resource.model.request.UploadRequest;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
 import it.luncent.cloud_storage.resource.util.ResourcePathUtil;
+import it.luncent.cloud_storage.storage.exception.ResourceNotFoundException;
 import it.luncent.cloud_storage.storage.service.ArchiveService;
 import it.luncent.cloud_storage.storage.service.StorageService;
 import lombok.RequiredArgsConstructor;
@@ -25,10 +28,13 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-import static it.luncent.cloud_storage.storage.util.StorageUtil.isDirectory;
+import static it.luncent.cloud_storage.common.constants.ObjectStorageConstants.EMPTY_DIRECTORY_MARKER;
+import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.isDirectory;
 import static java.util.stream.Collectors.toList;
 
 //TODO rethink exception handling
@@ -37,6 +43,9 @@ import static java.util.stream.Collectors.toList;
 @RequiredArgsConstructor
 @Slf4j
 public class ResourceServiceImpl implements ResourceService {
+
+    private static final String FILE_EXISTS_TEMPLATE = "conflict %s already exists";
+
     private final ResourcePathUtil resourcePathUtil;
     private final ResourceMapper resourceMapper;
     private final Tika tika;
@@ -44,14 +53,14 @@ public class ResourceServiceImpl implements ResourceService {
     private final ArchiveService archiveService;
 
     @Override
-    public ResourceMetadataResponse createDirectory(String path) {
-        return getResourceMetadata(createEmptyDirectory(resourcePathUtil.getResourcePathFromRelative(path)));
+    public ResourceMetadataResponse createEmptyDirectory(String relativePath) {
+        return getResourceMetadata(createEmptyDirectory(resourcePathUtil.getResourcePathFromRelative(relativePath)));
     }
 
     @Override
-    public void deleteResource(String path) {
-        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(path);
-        if (isDirectory(path)) {
+    public void deleteResource(String relativePath) {
+        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(relativePath);
+        if (isDirectory(relativePath)) {
             storageService.deleteDirectory(resourcePath);
             return;
         }
@@ -101,18 +110,135 @@ public class ResourceServiceImpl implements ResourceService {
     public ResourceMetadataResponse moveResource(MoveRequest request) {
         ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(request.from());
 
-        if(isDirectory(request.from())) {
-            Iterable<Result<Item>> objects = storageService.getDirectoryContent(resourcePath);
-            moveDirectory(objects, resourcePath, request);
-            return null;
+        if (isDirectory(request.from())) {
+            moveDirectory(request, resourcePath);
+            String newDirectoryAbsolutePath = getFullTargetPath(resourcePath.absolute(), request);
+            String newDirectoryRelativePath = resourcePathUtil.getRelativePath(newDirectoryAbsolutePath);
+            return getResourceMetadata(newDirectoryRelativePath);
         }
 
-        return null;
+        ResourcePath newResourcePath = moveFile(request, resourcePath);
+        return getResourceMetadata(newResourcePath.relative());
     }
 
-    private void moveDirectory(Iterable<Result<Item>> objects, ResourcePath resourcePath, MoveRequest request) {
-        ResourcePath newFolderPath = resourcePathUtil.getResourcePathFromRelative(request.to());
-        createEmptyDirectory(newFolderPath);
+    private ResourcePath moveFile(MoveRequest request, ResourcePath sourcePath) {
+        StatObjectResponse response = storageService.getObjectMetadata(sourcePath);
+        String objectSourceFullPath = response.object();
+        checkCollisions(request, objectSourceFullPath);
+        ResourcePath newObjectPath = copyObject(objectSourceFullPath, request);
+        storageService.deleteFile(sourcePath);
+        return newObjectPath;
+    }
+
+    private void moveDirectory(MoveRequest request, ResourcePath sourcePath) {
+        List<Item> objects = new ArrayList<>();
+        PopulationFilter populationFilter = new PopulationFilter(true,  false, true);
+        storageService.populateWithDirectoryObjectsAsync(sourcePath, objects, populationFilter);
+        Set<String> sourceObjectsFullPaths = objects.stream()
+                .map(Item::objectName)
+                .collect(Collectors.toSet());
+        sourceObjectsFullPaths.add(sourcePath.absolute());
+        checkCollisions(request, sourceObjectsFullPaths.toArray(new String[0]));
+        sourceObjectsFullPaths.forEach(objectFullPath -> copyObject(objectFullPath, request));
+        storageService.deleteDirectory(sourcePath);
+    }
+
+    private ResourcePath copyObject(String sourceObjectFullPath, MoveRequest request) {
+        String targetFullPath = getFullTargetPath(sourceObjectFullPath, request);
+        ResourcePath toPath = resourcePathUtil.getResourcePathFromAbsolute(targetFullPath);
+        if (isDirectory(targetFullPath)) {
+            if (!directoryExists(toPath.relative())) {
+                createEmptyDirectory(toPath.relative());
+            }
+            //storageService.deleteDirectory(resourcePathUtil.getResourcePathFromAbsolute(sourceObjectFullPath));
+            return toPath;
+        }
+        ResourcePath fromPath = resourcePathUtil.getResourcePathFromAbsolute(sourceObjectFullPath);
+        storageService.copyObject(fromPath, toPath);
+        //storageService.deleteFile(fromPath);
+
+        return toPath;
+    }
+
+   /* private List<String> filterMovingObjects(List<String> objectsSourceFullPaths, MoveRequest request) {
+        List<String> filteredObjects = new ArrayList<>();
+        Iterator<String> iterator = objectsSourceFullPaths.iterator();
+        while (iterator.hasNext()) {
+            String objectSourceFullPath = iterator.next();
+            String objectTargetFullPath = getFullTargetPath(objectSourceFullPath, request);
+            if (isDirectory(objectTargetFullPath)) {
+                if (directoryExists(objectTargetFullPath)) {
+                    continue;
+                }
+            }
+            if (storageService.isReservedObject(objectTargetFullPath)) {
+                continue;
+            }
+            //в перемещении участвуют только отфильтрованные объекты(те файлы-маркеры пустых папок и сами папки, уже существующие, нет смысла заного пересоздавать)
+            filteredObjects.add(objectSourceFullPath);
+            //при перемещении, метод moveObject() удаляет исходный объект.
+            // Тк они удаляются, исключаем их этого списка, тк по нему позже выполняется удаление объектов которые не перемещались
+            //TODO может фильтрацию перенести в moveObject()?
+            iterator.remove();
+        }
+        return filteredObjects;
+    }*/
+
+    /**
+     * @param sourceFullPath полный путь перемещаемого объекта
+     *                       <pre>{@code
+     *                                                                   // Пример получения нового пути объекта, при перемещении папки
+     *                                                                   moveRequest = new MoveRequest(from="dir1/dir2/", to="dir3/")
+     *                                                                   fullTargetPath = moveObject("user-1-files/dir1/dir2/dir4/file.txt", moveRequest);
+     *                                                                   // fullTargetPath = user-1-files/dir3/dir4/file.txt
+     *                                                                   }</pre>
+     */
+    private String getFullTargetPath(String sourceFullPath, MoveRequest request) {
+        String sourcePathPrefix = resourcePathUtil.getResourcePathFromRelative(request.from()).absolute();
+        String targetPathPrefix = resourcePathUtil.getResourcePathFromRelative(request.to()).absolute();
+        return targetPathPrefix + (sourceFullPath.substring(sourcePathPrefix.length()));
+    }
+
+    private void checkCollisions(MoveRequest request, String... sourceObjectsFullPaths) {
+        List<String> errors = new ArrayList<>();
+        for (String sourceObjectFullPath : sourceObjectsFullPaths) {
+            String fullObjectTargetPath = getFullTargetPath(sourceObjectFullPath, request);
+            if (isDirectory(fullObjectTargetPath)) {
+                continue;
+            }
+            if (fileExists(fullObjectTargetPath)) {
+                errors.add(String.format(FILE_EXISTS_TEMPLATE, resourcePathUtil.getRelativePath(fullObjectTargetPath)));
+            }
+        }
+
+        if (!errors.isEmpty()) {
+            throw new MoveConflictException(String.join(", ", errors));
+        }
+    }
+
+    private boolean fileExists(String objectFullPath) {
+        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromAbsolute(objectFullPath);
+        try {
+            storageService.getObjectMetadata(resourcePath);
+            return true;
+        } catch (ResourceNotFoundException e) {
+            return false;
+        }
+    }
+
+    private boolean directoryExists(String relativeObjectPath) {
+        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(relativeObjectPath);
+        try {
+            Iterable<Result<Item>> results = storageService.getDirectoryContent(resourcePath);
+            for (Result<Item> result : results) {
+                if (result.get().objectName().endsWith(EMPTY_DIRECTORY_MARKER)) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     @Override

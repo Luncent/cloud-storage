@@ -1,6 +1,7 @@
 package it.luncent.cloud_storage.storage.service;
 
 import io.minio.messages.Item;
+import it.luncent.cloud_storage.common.constants.PopulationFilter;
 import it.luncent.cloud_storage.resource.exception.DownloadException;
 import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 import it.luncent.cloud_storage.resource.util.ResourcePathUtil;
@@ -23,11 +24,14 @@ import java.util.concurrent.Future;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-import static it.luncent.cloud_storage.storage.util.StorageUtil.isDirectory;
+import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.isDirectory;
+
 
 @Service
 @RequiredArgsConstructor
 public class ArchiveServiceImpl implements ArchiveService {
+
+    private static final PopulationFilter POPULATION_FILTER = new PopulationFilter(true, false, true);
 
     private final StorageService storageService;
     private final ResourcePathUtil resourcePathUtil;
@@ -37,7 +41,7 @@ public class ArchiveServiceImpl implements ArchiveService {
     public void downloadArchive(ResourcePath zippedDirectoryPath, OutputStream outputStream) {
         try (ZipOutputStream zipOutputStream = new ZipOutputStream(outputStream)) {
             List<Item> objects = new ArrayList<>();
-            storageService.populateWithDirectoryObjects(zippedDirectoryPath, objects);
+            storageService.populateWithDirectoryObjects(zippedDirectoryPath, objects, POPULATION_FILTER);
 
             for (Item item : objects) {
                 String absolutePath = item.objectName();
@@ -64,7 +68,7 @@ public class ArchiveServiceImpl implements ArchiveService {
     @Override
     public void downloadArchiveAsync(ResourcePath zippedDirectoryPath, OutputStream outputStream) {
         List<Item> objects = new ArrayList<>();
-        storageService.populateWithDirectoryObjectsAsync(zippedDirectoryPath, objects);
+        storageService.populateWithDirectoryObjectsAsync(zippedDirectoryPath, objects, POPULATION_FILTER);
 
         try (ZipOutputStream zipOutputStream = new ZipOutputStream(outputStream)) {
             LinkedList<ResourcePath> downloadingFilesPaths = new LinkedList<>();
