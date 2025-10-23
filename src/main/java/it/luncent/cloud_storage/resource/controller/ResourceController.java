@@ -1,6 +1,7 @@
 package it.luncent.cloud_storage.resource.controller;
 
 import it.luncent.cloud_storage.resource.model.request.MoveRequest;
+import it.luncent.cloud_storage.resource.model.request.UploadRequest;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
 import it.luncent.cloud_storage.resource.service.ResourceService;
 import jakarta.validation.constraints.NotNull;
@@ -12,9 +13,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 import java.util.List;
@@ -37,9 +40,9 @@ public class ResourceController {
 
     @GetMapping("/download")
     public ResponseEntity<StreamingResponseBody> downloadResource(@RequestParam(name = "path")
-                                                                        @NotNull(message = "request does not have path attribute")
-                                                                        @Pattern(regexp = "[a-zA-Z_а-я-А-Я0-9/.]+", message = "path contains wrong symbols")
-                                                                        String path) {
+                                                                  @NotNull(message = "request does not have path attribute")
+                                                                  @Pattern(regexp = "[a-zA-Z_а-я-А-Я0-9/.]+", message = "path contains wrong symbols")
+                                                                  String path) {
         StreamingResponseBody responseBody = outputStream -> resourceService.downloadResource(outputStream, path);
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
@@ -48,9 +51,9 @@ public class ResourceController {
 
     @DeleteMapping
     public ResponseEntity<Void> deleteResource(@RequestParam(name = "path")
-                                                   @NotNull(message = "request does not have path attribute")
-                                                   @Pattern(regexp = "[a-zA-Z_а-я-А-Я0-9/.]+", message = "path contains wrong symbols")
-                                                   String path){
+                                               @NotNull(message = "request does not have path attribute")
+                                               @Pattern(regexp = "[a-zA-Z_а-я-А-Я0-9/.]+", message = "path contains wrong symbols")
+                                               String path) {
         resourceService.deleteResource(path);
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
@@ -62,7 +65,19 @@ public class ResourceController {
 
     @GetMapping("/search")
     public ResponseEntity<List<ResourceMetadataResponse>> searchResource(@RequestParam(name = "query") String queryParam) {
-        Optional<String> query =  queryParam.isBlank() ? Optional.empty() : Optional.of(queryParam);
+        Optional<String> query = queryParam.isBlank() ? Optional.empty() : Optional.of(queryParam);
         return ResponseEntity.ok(resourceService.searchResource(query));
+    }
+
+    //TODO check folders creation from filename
+    // add validation
+    // check collisions
+    @PostMapping
+    public ResponseEntity<List<ResourceMetadataResponse>> uploadResource(@RequestParam MultipartFile file,
+                                                                         @RequestParam String path) {
+        UploadRequest uploadRequest = new UploadRequest(path, file);
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(resourceService.upload(uploadRequest));
     }
 }

@@ -158,7 +158,7 @@ public class MinioTestDataProvider {
     }
 
     private static UploadRequest createUploadRequest() throws IOException {
-        MultipartFile multipartFile = new MockMultipartFile("folder1/", new FileInputStream(ARCHIVE_PATH));
+        MultipartFile multipartFile = new MockMultipartFile("folder1.zip", new FileInputStream(ARCHIVE_PATH));
         return new UploadRequest(TARGET_DIRECTORY, multipartFile);
     }
 

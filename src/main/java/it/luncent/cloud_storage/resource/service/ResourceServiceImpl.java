@@ -4,7 +4,6 @@ import io.minio.Result;
 import io.minio.StatObjectResponse;
 import io.minio.messages.Item;
 import it.luncent.cloud_storage.common.constants.PopulationFilter;
-import it.luncent.cloud_storage.resource.constants.ResourceType;
 import it.luncent.cloud_storage.resource.exception.DownloadException;
 import it.luncent.cloud_storage.resource.exception.MoveConflictException;
 import it.luncent.cloud_storage.resource.mapper.ResourceMapper;
@@ -18,8 +17,8 @@ import it.luncent.cloud_storage.storage.exception.ResourceNotFoundException;
 import it.luncent.cloud_storage.storage.service.ArchiveService;
 import it.luncent.cloud_storage.storage.service.StorageService;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Strings;
 import org.apache.tika.Tika;
 import org.springframework.stereotype.Service;
@@ -30,6 +29,8 @@ import java.io.BufferedOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -85,15 +86,6 @@ public class ResourceServiceImpl implements ResourceService {
         writeFileInputStreamToOutputStream(fileInputStream, outputStream);
     }
 
-    private void writeFileInputStreamToOutputStream(InputStream fileInputStream, OutputStream outputStream) {
-        try (BufferedInputStream bis = new BufferedInputStream(fileInputStream);
-             BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream)) {
-            bis.transferTo(bufferedOutputStream);
-        } catch (Exception e) {
-            throw new DownloadException(e.getMessage(), e);
-        }
-    }
-
     @Override
     public List<ResourceMetadataResponse> getDirectoryContents(String path) {
         return List.of();
@@ -127,45 +119,6 @@ public class ResourceServiceImpl implements ResourceService {
         return getResourceMetadata(newResourcePath.relative());
     }
 
-    private ResourcePath moveFile(MoveRequest request, ResourcePath sourcePath) {
-        StatObjectResponse response = storageService.getObjectMetadata(sourcePath);
-        String objectSourceFullPath = response.object();
-        checkCollisions(request, objectSourceFullPath);
-        ResourcePath newObjectPath = copyObject(objectSourceFullPath, request);
-        storageService.deleteFile(sourcePath);
-        return newObjectPath;
-    }
-
-    private void moveDirectory(MoveRequest request, ResourcePath sourcePath) {
-        List<Item> objects = new ArrayList<>();
-        PopulationFilter populationFilter = new PopulationFilter(true, false, true);
-        storageService.populateWithDirectoryObjectsAsync(sourcePath, objects, populationFilter);
-        Set<String> sourceObjectsFullPaths = objects.stream()
-                .map(Item::objectName)
-                .collect(Collectors.toSet());
-        sourceObjectsFullPaths.add(sourcePath.absolute());
-        checkCollisions(request, sourceObjectsFullPaths.toArray(new String[0]));
-        sourceObjectsFullPaths.forEach(objectFullPath -> copyObject(objectFullPath, request));
-        storageService.deleteDirectory(sourcePath);
-    }
-
-    private ResourcePath copyObject(String sourceObjectFullPath, MoveRequest request) {
-        String targetFullPath = getFullTargetPath(sourceObjectFullPath, request);
-        ResourcePath toPath = resourcePathUtil.getResourcePathFromAbsolute(targetFullPath);
-        if (isDirectory(targetFullPath)) {
-            if (!directoryExists(toPath.relative())) {
-                createEmptyDirectory(toPath.relative());
-            }
-            //storageService.deleteDirectory(resourcePathUtil.getResourcePathFromAbsolute(sourceObjectFullPath));
-            return toPath;
-        }
-        ResourcePath fromPath = resourcePathUtil.getResourcePathFromAbsolute(sourceObjectFullPath);
-        storageService.copyObject(fromPath, toPath);
-        //storageService.deleteFile(fromPath);
-
-        return toPath;
-    }
-
    /* private List<String> filterMovingObjects(List<String> objectsSourceFullPaths, MoveRequest request) {
         List<String> filteredObjects = new ArrayList<>();
         Iterator<String> iterator = objectsSourceFullPaths.iterator();
@@ -190,14 +143,78 @@ public class ResourceServiceImpl implements ResourceService {
         return filteredObjects;
     }*/
 
+    @Override
+    public List<ResourceMetadataResponse> searchResource(Optional<String> query) {
+        ResourcePath rootDirectory = resourcePathUtil.getResourcePathFromRelative(ROOT_DIRECTORY);
+        List<Item> objects = new ArrayList<>();
+        PopulationFilter populationFilter = new PopulationFilter(true, false, true);
+        storageService.populateWithDirectoryObjectsAsync(rootDirectory, objects, populationFilter);
+
+        return query.map(searchQuery ->
+                        objects.stream()
+                                .filter(object -> resourceNameMatchesQuery(object.objectName(), searchQuery))
+                                .map(object -> resourcePathUtil.getRelativePath(object.objectName()))
+                                .map(this::getResourceMetadata)
+                                .toList())
+                .orElseGet(() ->
+                        objects.stream()
+                                .map(object -> resourcePathUtil.getRelativePath(object.objectName()))
+                                .map(this::getResourceMetadata)
+                                .toList());
+    }
+
+    @Override
+    @SneakyThrows
+    public List<ResourceMetadataResponse> upload(UploadRequest request) {
+        List<String> uploadedResourcesRelativePaths = new ArrayList<>(createNestedDirectories(request));
+
+        if (isArchive(request.file().getInputStream())) {
+            uploadedResourcesRelativePaths.addAll(uploadArchive(request));
+        } else {
+            uploadedResourcesRelativePaths.add(uploadFileResource(request));
+        }
+        return uploadedResourcesRelativePaths.stream()
+                .map(this::getResourceMetadata)
+                .collect(toList());
+    }
+
+    private List<String> createNestedDirectories(UploadRequest request) {
+        List<String> directoriesToCreate = getDirectoriesRelativePaths(request).stream()
+                .filter(directoryRelativePath -> !directoryExists(directoryRelativePath))
+                .collect(toList());
+        for (String directoryToCreate : directoriesToCreate) {
+            storageService.createEmptyDirectory(resourcePathUtil.getResourcePathFromRelative(directoryToCreate));
+        }
+        return directoriesToCreate;
+    }
+
+    private List<String> getDirectoriesRelativePaths(UploadRequest request) {
+        List<String> directoriesNames = new LinkedList<>(List.of(request.file().getName().split("/")));
+        //removing filename
+        directoriesNames.removeLast();
+
+        return directoriesNames.stream()
+                .map(name -> request.targetDirectory() + name + "/")
+                .collect(Collectors.toList());
+    }
+
+    private void writeFileInputStreamToOutputStream(InputStream fileInputStream, OutputStream outputStream) {
+        try (BufferedInputStream bis = new BufferedInputStream(fileInputStream);
+             BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream)) {
+            bis.transferTo(bufferedOutputStream);
+        } catch (Exception e) {
+            throw new DownloadException(e.getMessage(), e);
+        }
+    }
+
     /**
      * @param sourceFullPath полный путь перемещаемого объекта
      *                       <pre>{@code
-     *                                                                                                                                                                                                                                                                         // Пример получения нового пути объекта, при перемещении папки
-     *                                                                                                                                                                                                                                                                         moveRequest = new MoveRequest(from="dir1/dir2/", to="dir3/")
-     *                                                                                                                                                                                                                                                                         fullTargetPath = moveObject("user-1-files/dir1/dir2/dir4/file.txt", moveRequest);
-     *                                                                                                                                                                                                                                                                         // fullTargetPath = user-1-files/dir3/dir4/file.txt
-     *                                                                                                                                                                                                                                                                         }</pre>
+     *                                                                                                                                                                                                                                                                                               // Пример получения нового пути объекта, при перемещении папки
+     *                                                                                                                                                                                                                                                                                               moveRequest = new MoveRequest(from="dir1/dir2/", to="dir3/")
+     *                                                                                                                                                                                                                                                                                               fullTargetPath = moveObject("user-1-files/dir1/dir2/dir4/file.txt", moveRequest);
+     *                                                                                                                                                                                                                                                                                               // fullTargetPath = user-1-files/dir3/dir4/file.txt
+     *                                                                                                                                                                                                                                                                                               }</pre>
      */
     private String getFullTargetPath(String sourceFullPath, MoveRequest request) {
         String sourcePathPrefix = resourcePathUtil.getResourcePathFromRelative(request.from()).absolute();
@@ -247,24 +264,43 @@ public class ResourceServiceImpl implements ResourceService {
         }
     }
 
-    @Override
-    public List<ResourceMetadataResponse> searchResource(Optional<String> query) {
-        ResourcePath rootDirectory = resourcePathUtil.getResourcePathFromRelative(ROOT_DIRECTORY);
+    private ResourcePath moveFile(MoveRequest request, ResourcePath sourcePath) {
+        StatObjectResponse response = storageService.getObjectMetadata(sourcePath);
+        String objectSourceFullPath = response.object();
+        checkCollisions(request, objectSourceFullPath);
+        ResourcePath newObjectPath = copyObject(objectSourceFullPath, request);
+        storageService.deleteFile(sourcePath);
+        return newObjectPath;
+    }
+
+    private void moveDirectory(MoveRequest request, ResourcePath sourcePath) {
         List<Item> objects = new ArrayList<>();
         PopulationFilter populationFilter = new PopulationFilter(true, false, true);
-        storageService.populateWithDirectoryObjectsAsync(rootDirectory, objects, populationFilter);
+        storageService.populateWithDirectoryObjectsAsync(sourcePath, objects, populationFilter);
+        Set<String> sourceObjectsFullPaths = objects.stream()
+                .map(Item::objectName)
+                .collect(Collectors.toSet());
+        sourceObjectsFullPaths.add(sourcePath.absolute());
+        checkCollisions(request, sourceObjectsFullPaths.toArray(new String[0]));
+        sourceObjectsFullPaths.forEach(objectFullPath -> copyObject(objectFullPath, request));
+        storageService.deleteDirectory(sourcePath);
+    }
 
-        return query.map(searchQuery ->
-                        objects.stream()
-                                .filter(object -> resourceNameMatchesQuery(object.objectName(), searchQuery))
-                                .map(object -> resourcePathUtil.getRelativePath(object.objectName()))
-                                .map(this::getResourceMetadata)
-                                .toList())
-                .orElseGet(() ->
-                        objects.stream()
-                                .map(object -> resourcePathUtil.getRelativePath(object.objectName()))
-                                .map(this::getResourceMetadata)
-                                .toList());
+    private ResourcePath copyObject(String sourceObjectFullPath, MoveRequest request) {
+        String targetFullPath = getFullTargetPath(sourceObjectFullPath, request);
+        ResourcePath toPath = resourcePathUtil.getResourcePathFromAbsolute(targetFullPath);
+        if (isDirectory(targetFullPath)) {
+            if (!directoryExists(toPath.relative())) {
+                createEmptyDirectory(toPath.relative());
+            }
+            //storageService.deleteDirectory(resourcePathUtil.getResourcePathFromAbsolute(sourceObjectFullPath));
+            return toPath;
+        }
+        ResourcePath fromPath = resourcePathUtil.getResourcePathFromAbsolute(sourceObjectFullPath);
+        storageService.copyObject(fromPath, toPath);
+        //storageService.deleteFile(fromPath);
+
+        return toPath;
     }
 
     private boolean resourceNameMatchesQuery(String resourceName, String query) {
@@ -284,21 +320,6 @@ public class ResourceServiceImpl implements ResourceService {
             String fileName = resourceName.substring(lastSlashIndex + 1);
             return Strings.CI.contains(fileName, query);
         }
-    }
-
-    @Override
-    public List<ResourceMetadataResponse> upload(UploadRequest request) {
-        List<String> uploadedResourcesNames = new ArrayList<>();
-        if (isArchive(request)) {
-            //TODO check should get relative path
-            uploadedResourcesNames.addAll(uploadArchive(request));
-        } else {
-            //TODO check should get relative path
-            uploadedResourcesNames.add(uploadFileResource(request));
-        }
-        return uploadedResourcesNames.stream()
-                .map(this::getResourceMetadata)
-                .collect(toList());
     }
 
     private String uploadFileResource(UploadRequest request) {
@@ -339,25 +360,25 @@ public class ResourceServiceImpl implements ResourceService {
     }*/
 
     private List<String> uploadArchive(UploadRequest request) {
-        List<String> uploadedResourcesNames = new ArrayList<>();
+        List<String> uploadedResourcesRelativePaths = new ArrayList<>();
 
         MultipartFile archive = request.file();
         try (ZipInputStream zis = new ZipInputStream(archive.getInputStream())) {
             ZipEntry entry;
             while ((entry = zis.getNextEntry()) != null) {
                 if (entry.isDirectory()) {
-                    uploadedResourcesNames.add(createEmptyDirectory(resourcePathUtil.getResourcePathFromRelative(request.targetDirectory() + entry.getName())));
+                    uploadedResourcesRelativePaths.add(createEmptyDirectory(resourcePathUtil.getResourcePathFromRelative(request.targetDirectory() + entry.getName())));
                     zis.closeEntry();
                     continue;
                 }
-                uploadedResourcesNames.add(uploadFileFromArchive(zis, entry, request));
+                uploadedResourcesRelativePaths.add(uploadFileFromArchive(zis, entry, request));
                 zis.closeEntry();
             }
         } catch (Exception e) {
             log.debug(e.getMessage(), e);
             throw new RuntimeException(e);
         }
-        return uploadedResourcesNames;
+        return uploadedResourcesRelativePaths;
     }
 
     private String uploadFileFromArchive(ZipInputStream archiveInputStream, ZipEntry entry, UploadRequest request) throws Exception {
@@ -376,8 +397,12 @@ public class ResourceServiceImpl implements ResourceService {
         return path.relative();
     }
 
-    private boolean isArchive(UploadRequest request) {
-        return !request.file().getResource().isFile();
+    private boolean isArchive(InputStream fileInputStream) {
+        try {
+            return tika.detect(fileInputStream).equals("application/zip");
+        }catch (Exception e){
+            throw new RuntimeException(e);
+        }
     }
 
 }
