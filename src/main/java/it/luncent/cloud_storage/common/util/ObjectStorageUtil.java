@@ -11,4 +11,10 @@ public class ObjectStorageUtil {
     public static boolean isDirectory(String path) {
         return path.endsWith("/");
     }
+
+    public static boolean resourceIsInRootDirectory(int slashIndex) {
+        return slashIndex == -1;
+    }
+
+
 }

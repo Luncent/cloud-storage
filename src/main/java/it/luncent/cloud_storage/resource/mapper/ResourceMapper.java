@@ -6,6 +6,8 @@ import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
 import org.mapstruct.Mapper;
 
+import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.resourceIsInRootDirectory;
+
 @Mapper(componentModel = "spring")
 public interface ResourceMapper {
 
@@ -32,10 +34,6 @@ public interface ResourceMapper {
         String fileName = relativePath.substring(lastSlashIndex + 1);
         String filePath = relativePath.substring(0, lastSlashIndex+1);
         return new ResourceMetadataResponse(filePath, fileName, objectMetadata.size(), ResourceType.FILE);
-    }
-
-    private boolean resourceIsInRootDirectory(int slashIndex) {
-        return slashIndex == -1;
     }
 
     private boolean isRootDirectory(String path) {

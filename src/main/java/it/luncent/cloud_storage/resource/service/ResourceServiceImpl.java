@@ -4,6 +4,7 @@ import io.minio.Result;
 import io.minio.StatObjectResponse;
 import io.minio.messages.Item;
 import it.luncent.cloud_storage.common.constants.PopulationFilter;
+import it.luncent.cloud_storage.resource.constants.ResourceType;
 import it.luncent.cloud_storage.resource.exception.DownloadException;
 import it.luncent.cloud_storage.resource.exception.MoveConflictException;
 import it.luncent.cloud_storage.resource.mapper.ResourceMapper;
@@ -18,6 +19,8 @@ import it.luncent.cloud_storage.storage.service.ArchiveService;
 import it.luncent.cloud_storage.storage.service.StorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Strings;
 import org.apache.tika.Tika;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -28,13 +31,16 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import static it.luncent.cloud_storage.common.constants.ObjectStorageConstants.EMPTY_DIRECTORY_MARKER;
+import static it.luncent.cloud_storage.common.constants.ObjectStorageConstants.ROOT_DIRECTORY;
 import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.isDirectory;
+import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.resourceIsInRootDirectory;
 import static java.util.stream.Collectors.toList;
 
 //TODO rethink exception handling
@@ -132,7 +138,7 @@ public class ResourceServiceImpl implements ResourceService {
 
     private void moveDirectory(MoveRequest request, ResourcePath sourcePath) {
         List<Item> objects = new ArrayList<>();
-        PopulationFilter populationFilter = new PopulationFilter(true,  false, true);
+        PopulationFilter populationFilter = new PopulationFilter(true, false, true);
         storageService.populateWithDirectoryObjectsAsync(sourcePath, objects, populationFilter);
         Set<String> sourceObjectsFullPaths = objects.stream()
                 .map(Item::objectName)
@@ -187,11 +193,11 @@ public class ResourceServiceImpl implements ResourceService {
     /**
      * @param sourceFullPath полный путь перемещаемого объекта
      *                       <pre>{@code
-     *                                                                   // Пример получения нового пути объекта, при перемещении папки
-     *                                                                   moveRequest = new MoveRequest(from="dir1/dir2/", to="dir3/")
-     *                                                                   fullTargetPath = moveObject("user-1-files/dir1/dir2/dir4/file.txt", moveRequest);
-     *                                                                   // fullTargetPath = user-1-files/dir3/dir4/file.txt
-     *                                                                   }</pre>
+     *                                                                                                                                                                                                                                                                         // Пример получения нового пути объекта, при перемещении папки
+     *                                                                                                                                                                                                                                                                         moveRequest = new MoveRequest(from="dir1/dir2/", to="dir3/")
+     *                                                                                                                                                                                                                                                                         fullTargetPath = moveObject("user-1-files/dir1/dir2/dir4/file.txt", moveRequest);
+     *                                                                                                                                                                                                                                                                         // fullTargetPath = user-1-files/dir3/dir4/file.txt
+     *                                                                                                                                                                                                                                                                         }</pre>
      */
     private String getFullTargetPath(String sourceFullPath, MoveRequest request) {
         String sourcePathPrefix = resourcePathUtil.getResourcePathFromRelative(request.from()).absolute();
@@ -242,8 +248,42 @@ public class ResourceServiceImpl implements ResourceService {
     }
 
     @Override
-    public List<ResourceMetadataResponse> searchResource(String query) {
-        return List.of();
+    public List<ResourceMetadataResponse> searchResource(Optional<String> query) {
+        ResourcePath rootDirectory = resourcePathUtil.getResourcePathFromRelative(ROOT_DIRECTORY);
+        List<Item> objects = new ArrayList<>();
+        PopulationFilter populationFilter = new PopulationFilter(true, false, true);
+        storageService.populateWithDirectoryObjectsAsync(rootDirectory, objects, populationFilter);
+
+        return query.map(searchQuery ->
+                        objects.stream()
+                                .filter(object -> resourceNameMatchesQuery(object.objectName(), searchQuery))
+                                .map(object -> resourcePathUtil.getRelativePath(object.objectName()))
+                                .map(this::getResourceMetadata)
+                                .toList())
+                .orElseGet(() ->
+                        objects.stream()
+                                .map(object -> resourcePathUtil.getRelativePath(object.objectName()))
+                                .map(this::getResourceMetadata)
+                                .toList());
+    }
+
+    private boolean resourceNameMatchesQuery(String resourceName, String query) {
+        if (isDirectory(resourceName)) {
+            int length = resourceName.length();
+            int penultimateSlashIndex = resourceName.lastIndexOf('/', length - 2);
+            if (resourceIsInRootDirectory(penultimateSlashIndex)) {
+                return Strings.CI.contains(resourceName, query);
+            }
+            String directoryName = resourceName.substring(penultimateSlashIndex + 1);
+            return Strings.CI.contains(directoryName, query);
+        } else {
+            int lastSlashIndex = resourceName.lastIndexOf('/');
+            if (resourceIsInRootDirectory(lastSlashIndex)) {
+                return Strings.CI.contains(resourceName, query);
+            }
+            String fileName = resourceName.substring(lastSlashIndex + 1);
+            return Strings.CI.contains(fileName, query);
+        }
     }
 
     @Override

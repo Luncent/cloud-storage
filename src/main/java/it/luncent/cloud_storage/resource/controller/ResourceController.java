@@ -17,6 +17,9 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
+import java.util.List;
+import java.util.Optional;
+
 @RestController
 @RequestMapping("/api/resource")
 @RequiredArgsConstructor
@@ -55,5 +58,11 @@ public class ResourceController {
     @GetMapping("/move")
     public ResponseEntity<ResourceMetadataResponse> moveResource(@Validated MoveRequest moveRequest) {
         return ResponseEntity.ok(resourceService.moveResource(moveRequest));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<List<ResourceMetadataResponse>> searchResource(@RequestParam(name = "query") String queryParam) {
+        Optional<String> query =  queryParam.isBlank() ? Optional.empty() : Optional.of(queryParam);
+        return ResponseEntity.ok(resourceService.searchResource(query));
     }
 }

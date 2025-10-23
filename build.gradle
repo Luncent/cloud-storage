@@ -52,6 +52,7 @@ dependencies {
 
     //other
     runtimeOnly 'org.postgresql:postgresql'
+    implementation("org.apache.commons:commons-lang3:3.18.0")
 
     //tests
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

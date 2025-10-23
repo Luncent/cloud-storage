@@ -6,6 +6,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import static it.luncent.cloud_storage.common.constants.ObjectStorageConstants.ROOT_DIRECTORY;
+
 @Component
 @RequiredArgsConstructor
 public class ResourcePathUtil {
@@ -19,7 +21,7 @@ public class ResourcePathUtil {
 
     public ResourcePath getResourcePathFromRelative(String relativePath) {
         Long currentUserId = authService.getCurrentUser().id();
-        String realPath = relativePath.equals("/")
+        String realPath = relativePath.equals(ROOT_DIRECTORY)
                 ? String.format(USER_RESOURCE_PATH_TEMPLATE, currentUserId, "")
                 : String.format(USER_RESOURCE_PATH_TEMPLATE, currentUserId, relativePath);
         return new ResourcePath(relativePath, realPath, usersBucket);
