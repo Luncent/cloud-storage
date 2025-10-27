@@ -4,6 +4,7 @@ import it.luncent.cloud_storage.resource.model.request.MoveRequest;
 import it.luncent.cloud_storage.resource.model.request.UploadRequest;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
 import it.luncent.cloud_storage.resource.service.ResourceService;
+import it.luncent.cloud_storage.resource.validation.IsDirectory;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
@@ -72,6 +73,7 @@ public class ResourceController {
     //TODO check folders creation from filename
     // add validation
     // check collisions
+    // bug with uploading with params: filename: ODOS Prototype.postman_collection.json, path: r/
     @PostMapping
     public ResponseEntity<List<ResourceMetadataResponse>> uploadResource(@RequestParam MultipartFile file,
                                                                          @RequestParam String path) {

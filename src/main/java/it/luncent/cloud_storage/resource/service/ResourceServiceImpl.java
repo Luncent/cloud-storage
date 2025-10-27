@@ -4,8 +4,9 @@ import io.minio.Result;
 import io.minio.StatObjectResponse;
 import io.minio.messages.Item;
 import it.luncent.cloud_storage.common.constants.PopulationFilter;
+import it.luncent.cloud_storage.common.util.ObjectStorageUtil;
 import it.luncent.cloud_storage.resource.exception.DownloadException;
-import it.luncent.cloud_storage.resource.exception.MoveConflictException;
+import it.luncent.cloud_storage.resource.exception.ConflictException;
 import it.luncent.cloud_storage.resource.mapper.ResourceMapper;
 import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 import it.luncent.cloud_storage.resource.model.common.UploadingFile;
@@ -19,6 +20,7 @@ import it.luncent.cloud_storage.storage.service.StorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Strings;
 import org.apache.tika.Tika;
 import org.springframework.stereotype.Service;
@@ -29,7 +31,6 @@ import java.io.BufferedOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
@@ -44,14 +45,12 @@ import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.isDirectory
 import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.resourceIsInRootDirectory;
 import static java.util.stream.Collectors.toList;
 
-//TODO rethink exception handling
-//TODO get bucket name for users from properties files
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class ResourceServiceImpl implements ResourceService {
 
-    private static final String FILE_EXISTS_TEMPLATE = "conflict %s already exists";
+    private static final String OBJECT_EXISTS_TEMPLATE = "conflict %s already exists";
 
     private final ResourcePathUtil resourcePathUtil;
     private final ResourceMapper resourceMapper;
@@ -61,6 +60,9 @@ public class ResourceServiceImpl implements ResourceService {
 
     @Override
     public ResourceMetadataResponse createEmptyDirectory(String relativePath) {
+        if (directoryExists(relativePath)){
+            throw new ConflictException(String.format(OBJECT_EXISTS_TEMPLATE, relativePath));
+        }
         return getResourceMetadata(createEmptyDirectory(resourcePathUtil.getResourcePathFromRelative(relativePath)));
     }
 
@@ -87,8 +89,22 @@ public class ResourceServiceImpl implements ResourceService {
     }
 
     @Override
+    @SneakyThrows
     public List<ResourceMetadataResponse> getDirectoryContents(String path) {
-        return List.of();
+        if(StringUtils.isBlank(path)){
+            return new ArrayList<>();
+        }
+        //TODO not found
+        List<ResourceMetadataResponse> directoryContents = new ArrayList<>();
+        Iterable<Result<Item>> objects = storageService.getDirectoryContent(resourcePathUtil.getResourcePathFromRelative(path));
+        //TODO распараллелить
+        for(Result<Item> result : objects) {
+            String objectFullPath = result.get().objectName();
+            if(!ObjectStorageUtil.isMarker(objectFullPath)) {
+                directoryContents.add(getResourceMetadata(resourcePathUtil.getRelativePath(objectFullPath)));
+            }
+        }
+        return directoryContents;
     }
 
     //TODO think about exception handling (convert minio exceptions)
@@ -119,35 +135,15 @@ public class ResourceServiceImpl implements ResourceService {
         return getResourceMetadata(newResourcePath.relative());
     }
 
-   /* private List<String> filterMovingObjects(List<String> objectsSourceFullPaths, MoveRequest request) {
-        List<String> filteredObjects = new ArrayList<>();
-        Iterator<String> iterator = objectsSourceFullPaths.iterator();
-        while (iterator.hasNext()) {
-            String objectSourceFullPath = iterator.next();
-            String objectTargetFullPath = getFullTargetPath(objectSourceFullPath, request);
-            if (isDirectory(objectTargetFullPath)) {
-                if (directoryExists(objectTargetFullPath)) {
-                    continue;
-                }
-            }
-            if (storageService.isReservedObject(objectTargetFullPath)) {
-                continue;
-            }
-            //в перемещении участвуют только отфильтрованные объекты(те файлы-маркеры пустых папок и сами папки, уже существующие, нет смысла заного пересоздавать)
-            filteredObjects.add(objectSourceFullPath);
-            //при перемещении, метод moveObject() удаляет исходный объект.
-            // Тк они удаляются, исключаем их этого списка, тк по нему позже выполняется удаление объектов которые не перемещались
-            //TODO может фильтрацию перенести в moveObject()?
-            iterator.remove();
-        }
-        return filteredObjects;
-    }*/
-
     @Override
     public List<ResourceMetadataResponse> searchResource(Optional<String> query) {
         ResourcePath rootDirectory = resourcePathUtil.getResourcePathFromRelative(ROOT_DIRECTORY);
         List<Item> objects = new ArrayList<>();
-        PopulationFilter populationFilter = new PopulationFilter(true, false, true);
+        PopulationFilter populationFilter = PopulationFilter.builder()
+                .includeDirectories(true)
+                .includeMarkers(false)
+                .includeFiles(true)
+                .build();
         storageService.populateWithDirectoryObjectsAsync(rootDirectory, objects, populationFilter);
 
         return query.map(searchQuery ->
@@ -230,12 +226,12 @@ public class ResourceServiceImpl implements ResourceService {
                 continue;
             }
             if (fileExists(fullObjectTargetPath)) {
-                errors.add(String.format(FILE_EXISTS_TEMPLATE, resourcePathUtil.getRelativePath(fullObjectTargetPath)));
+                errors.add(String.format(OBJECT_EXISTS_TEMPLATE, resourcePathUtil.getRelativePath(fullObjectTargetPath)));
             }
         }
 
         if (!errors.isEmpty()) {
-            throw new MoveConflictException(String.join(", ", errors));
+            throw new ConflictException(String.join(", ", errors));
         }
     }
 
@@ -249,6 +245,7 @@ public class ResourceServiceImpl implements ResourceService {
         }
     }
 
+    //TODO move to storage service
     private boolean directoryExists(String relativeObjectPath) {
         ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(relativeObjectPath);
         try {
@@ -275,7 +272,11 @@ public class ResourceServiceImpl implements ResourceService {
 
     private void moveDirectory(MoveRequest request, ResourcePath sourcePath) {
         List<Item> objects = new ArrayList<>();
-        PopulationFilter populationFilter = new PopulationFilter(true, false, true);
+        PopulationFilter populationFilter = PopulationFilter.builder()
+                .includeDirectories(true)
+                .includeMarkers(false)
+                .includeFiles(true)
+                .build();
         storageService.populateWithDirectoryObjectsAsync(sourcePath, objects, populationFilter);
         Set<String> sourceObjectsFullPaths = objects.stream()
                 .map(Item::objectName)

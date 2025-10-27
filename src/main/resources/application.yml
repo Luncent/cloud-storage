@@ -24,6 +24,10 @@ minio:
   password: 12345678
   users-bucket: "user-files"
 
+cors:
+  allowed-origins:
+    - "http://localhost:8082"
+
 logging:
   level:
     org.springframework.security.authentication.dao: DEBUG

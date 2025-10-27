@@ -11,8 +11,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 @Slf4j
 public class ResourceExceptionHandler {
 
-    @ExceptionHandler(MoveConflictException.class)
-    public ResponseEntity<ErrorResponse> moveConflictExceptionHandler(MoveConflictException e) {
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<ErrorResponse> moveConflictExceptionHandler(ConflictException e) {
         log.error(e.getMessage(), e);
         return ResponseEntity.status(HttpStatus.CONFLICT).body(new ErrorResponse(e.getMessage()));
     }

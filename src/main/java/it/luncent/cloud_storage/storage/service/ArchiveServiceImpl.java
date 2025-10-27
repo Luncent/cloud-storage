@@ -31,7 +31,11 @@ import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.isDirectory
 @RequiredArgsConstructor
 public class ArchiveServiceImpl implements ArchiveService {
 
-    private static final PopulationFilter POPULATION_FILTER = new PopulationFilter(true, false, true);
+    private static final PopulationFilter POPULATION_FILTER = PopulationFilter.builder()
+            .includeDirectories(true)
+            .includeMarkers(false)
+            .includeFiles(true)
+            .build();
 
     private final StorageService storageService;
     private final ResourcePathUtil resourcePathUtil;
@@ -112,14 +116,17 @@ public class ArchiveServiceImpl implements ArchiveService {
 
     private void writeFileInputStreamToOutputStream(InputStream fileInputStream, OutputStream outputStream) {
         try (BufferedInputStream bis = new BufferedInputStream(fileInputStream)) {
+            //cant close as zipOutputStream.closeEntry(); should do it
             BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream);
             bis.transferTo(bufferedOutputStream);
+            //zipOutputStream.closeEntry(); doesnt flush buffered bytes, have to do it myself
             bufferedOutputStream.flush();
         } catch (Exception e) {
             throw new DownloadException(e.getMessage(), e);
         }
     }
 
+    // if downloading directory /test_dir/dir4/, then filename for a file with path /test_dir/dir4/file1.sql should be file1.sql
     private String getResourceRelativePath(String absolute, String zippedFolderPath) {
         return absolute.replace(zippedFolderPath, "");
     }
