@@ -3,10 +3,11 @@ package it.luncent.cloud_storage.resource.util;
 import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 import it.luncent.cloud_storage.security.service.AuthService;
 import lombok.RequiredArgsConstructor;
+import org.apache.tika.utils.StringUtils;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
-import static it.luncent.cloud_storage.common.constants.ObjectStorageConstants.ROOT_DIRECTORY;
+import static it.luncent.cloud_storage.common.constants.ObjectStorageConstants.DIRECTORY_SUFFIX;
 
 @Component
 @RequiredArgsConstructor
@@ -20,11 +21,23 @@ public class ResourcePathUtil {
     private String usersBucket;
 
     public ResourcePath getResourcePathFromRelative(String relativePath) {
+        String realPath = getAbsolutePathFromRelative(relativePath);
+        return new ResourcePath(relativePath, realPath, usersBucket);
+    }
+
+    public String getAbsolutePathFromRelative(String relativePath) {
         Long currentUserId = authService.getCurrentUser().id();
-        String realPath = relativePath.equals(ROOT_DIRECTORY)
+
+        if(!StringUtils.isEmpty(relativePath)) {
+            //почемуто фронт на запрос удаления присылает путь который начинается со / а во всех других случаях такого нет
+            if(relativePath.startsWith(DIRECTORY_SUFFIX)) {
+                relativePath = relativePath.substring(DIRECTORY_SUFFIX.length());
+            }
+        }
+
+        return StringUtils.isBlank(relativePath) || relativePath.equals(DIRECTORY_SUFFIX)
                 ? String.format(USER_RESOURCE_PATH_TEMPLATE, currentUserId, "")
                 : String.format(USER_RESOURCE_PATH_TEMPLATE, currentUserId, relativePath);
-        return new ResourcePath(relativePath, realPath, usersBucket);
     }
 
     public ResourcePath getResourcePathFromAbsolute(String absolutePath) {

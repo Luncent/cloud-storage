@@ -26,4 +26,6 @@ public interface ResourceService {
 
     //TODO temporary file max size. Why we need to set it. Check file name before upload, maybe add more symbols for correct path regexp
     List<ResourceMetadataResponse> upload(UploadRequest request);
+
+    List<ResourceMetadataResponse> upload(List<UploadRequest> requests);
 }

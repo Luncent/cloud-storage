@@ -14,6 +14,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
+import static it.luncent.cloud_storage.common.constants.ObjectStorageConstants.DIRECTORY_SUFFIX;
+
 @RestController
 @RequestMapping("/api/directory")
 @RequiredArgsConstructor
@@ -31,7 +33,7 @@ public class DirectoryController {
     @PostMapping
     public ResponseEntity<ResourceMetadataResponse> createEmptyDirectory(@RequestParam
                                                                          @Validated
-                                                                         @IsDirectory String path){
+                                                                         @IsDirectory String path) {
         return ResponseEntity.ok(resourceService.createEmptyDirectory(path));
     }
 

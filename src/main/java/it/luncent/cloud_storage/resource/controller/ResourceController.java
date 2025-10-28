@@ -4,7 +4,6 @@ import it.luncent.cloud_storage.resource.model.request.MoveRequest;
 import it.luncent.cloud_storage.resource.model.request.UploadRequest;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
 import it.luncent.cloud_storage.resource.service.ResourceService;
-import it.luncent.cloud_storage.resource.validation.IsDirectory;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
@@ -17,6 +16,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
@@ -71,15 +71,18 @@ public class ResourceController {
     }
 
     //TODO check folders creation from filename
-    // add validation
+    // add validation for resource names
     // check collisions
     // bug with uploading with params: filename: ODOS Prototype.postman_collection.json, path: r/
     @PostMapping
-    public ResponseEntity<List<ResourceMetadataResponse>> uploadResource(@RequestParam MultipartFile file,
-                                                                         @RequestParam String path) {
-        UploadRequest uploadRequest = new UploadRequest(path, file);
+    public ResponseEntity<List<ResourceMetadataResponse>> uploadResource(@RequestPart(name = "object") List<MultipartFile> objects,
+                                                                         @RequestPart(required = false) String path) {
+        List<UploadRequest> uploadRequests = objects.stream()
+                .map(file -> new UploadRequest(path, file))
+                .toList();
+
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(resourceService.upload(uploadRequest));
+                .body(resourceService.upload(uploadRequests));
     }
 }

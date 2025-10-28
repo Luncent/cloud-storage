@@ -31,10 +31,12 @@ import java.io.BufferedOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -60,7 +62,7 @@ public class ResourceServiceImpl implements ResourceService {
 
     @Override
     public ResourceMetadataResponse createEmptyDirectory(String relativePath) {
-        if (directoryExists(relativePath)){
+        if (directoryExists(relativePath)) {
             throw new ConflictException(String.format(OBJECT_EXISTS_TEMPLATE, relativePath));
         }
         return getResourceMetadata(createEmptyDirectory(resourcePathUtil.getResourcePathFromRelative(relativePath)));
@@ -91,16 +93,13 @@ public class ResourceServiceImpl implements ResourceService {
     @Override
     @SneakyThrows
     public List<ResourceMetadataResponse> getDirectoryContents(String path) {
-        if(StringUtils.isBlank(path)){
-            return new ArrayList<>();
-        }
         //TODO not found
         List<ResourceMetadataResponse> directoryContents = new ArrayList<>();
         Iterable<Result<Item>> objects = storageService.getDirectoryContent(resourcePathUtil.getResourcePathFromRelative(path));
         //TODO распараллелить
-        for(Result<Item> result : objects) {
+        for (Result<Item> result : objects) {
             String objectFullPath = result.get().objectName();
-            if(!ObjectStorageUtil.isMarker(objectFullPath)) {
+            if (!ObjectStorageUtil.isMarker(objectFullPath)) {
                 directoryContents.add(getResourceMetadata(resourcePathUtil.getRelativePath(objectFullPath)));
             }
         }
@@ -167,10 +166,20 @@ public class ResourceServiceImpl implements ResourceService {
         if (isArchive(request.file().getInputStream())) {
             uploadedResourcesRelativePaths.addAll(uploadArchive(request));
         } else {
+            checkCollisions(fileName -> resourcePathUtil.getAbsolutePathFromRelative(request.targetDirectory() + fileName),
+                    request.file().getResource().getFilename());
             uploadedResourcesRelativePaths.add(uploadFileResource(request));
         }
         return uploadedResourcesRelativePaths.stream()
                 .map(this::getResourceMetadata)
+                .collect(toList());
+    }
+
+    @Override
+    public List<ResourceMetadataResponse> upload(List<UploadRequest> requests) {
+        return requests.stream()
+                .map(this::upload)
+                .flatMap(Collection::stream)
                 .collect(toList());
     }
 
@@ -184,8 +193,10 @@ public class ResourceServiceImpl implements ResourceService {
         return directoriesToCreate;
     }
 
+
     private List<String> getDirectoriesRelativePaths(UploadRequest request) {
-        List<String> directoriesNames = new LinkedList<>(List.of(request.file().getName().split("/")));
+        @SuppressWarnings("ConstantConditions")
+        List<String> directoriesNames = new LinkedList<>(List.of(request.file().getResource().getFilename().split("/")));
         //removing filename
         directoriesNames.removeLast();
 
@@ -206,11 +217,11 @@ public class ResourceServiceImpl implements ResourceService {
     /**
      * @param sourceFullPath полный путь перемещаемого объекта
      *                       <pre>{@code
-     *                                                                                                                                                                                                                                                                                               // Пример получения нового пути объекта, при перемещении папки
-     *                                                                                                                                                                                                                                                                                               moveRequest = new MoveRequest(from="dir1/dir2/", to="dir3/")
-     *                                                                                                                                                                                                                                                                                               fullTargetPath = moveObject("user-1-files/dir1/dir2/dir4/file.txt", moveRequest);
-     *                                                                                                                                                                                                                                                                                               // fullTargetPath = user-1-files/dir3/dir4/file.txt
-     *                                                                                                                                                                                                                                                                                               }</pre>
+     *                                                                                                                                                                                                                                                                                                                     // Пример получения нового пути объекта, при перемещении папки
+     *                                                                                                                                                                                                                                                                                                                     moveRequest = new MoveRequest(from="dir1/dir2/", to="dir3/")
+     *                                                                                                                                                                                                                                                                                                                     fullTargetPath = moveObject("user-1-files/dir1/dir2/dir4/file.txt", moveRequest);
+     *                                                                                                                                                                                                                                                                                                                     // fullTargetPath = user-1-files/dir3/dir4/file.txt
+     *                                                                                                                                                                                                                                                                                                                     }</pre>
      */
     private String getFullTargetPath(String sourceFullPath, MoveRequest request) {
         String sourcePathPrefix = resourcePathUtil.getResourcePathFromRelative(request.from()).absolute();
@@ -218,10 +229,16 @@ public class ResourceServiceImpl implements ResourceService {
         return targetPathPrefix + (sourceFullPath.substring(sourcePathPrefix.length()));
     }
 
-    private void checkCollisions(MoveRequest request, String... sourceObjectsFullPaths) {
+    /**
+     * @param getObjectFullPath function that constructs path of object by performing manipulations on each {object}.
+     *                          For example when we are saving file1.txt to directory dir/ final path should be dir1/file1.txt
+     *                          or when moving files or dirs from one place - dir1/file.txt to dir2/ we should get dir2/file.txt
+     * @param objects           files names, paths or any other string from which we construct fullObjectPath by applying getObjectFullPath on it
+     */
+    private void checkCollisions(Function<String, String> getObjectFullPath, String... objects) {
         List<String> errors = new ArrayList<>();
-        for (String sourceObjectFullPath : sourceObjectsFullPaths) {
-            String fullObjectTargetPath = getFullTargetPath(sourceObjectFullPath, request);
+        for (String sourceObjectFullPath : objects) {
+            String fullObjectTargetPath = getObjectFullPath.apply(sourceObjectFullPath);
             if (isDirectory(fullObjectTargetPath)) {
                 continue;
             }
@@ -264,7 +281,7 @@ public class ResourceServiceImpl implements ResourceService {
     private ResourcePath moveFile(MoveRequest request, ResourcePath sourcePath) {
         StatObjectResponse response = storageService.getObjectMetadata(sourcePath);
         String objectSourceFullPath = response.object();
-        checkCollisions(request, objectSourceFullPath);
+        checkCollisions((fullPath) -> getFullTargetPath(fullPath, request), objectSourceFullPath);
         ResourcePath newObjectPath = copyObject(objectSourceFullPath, request);
         storageService.deleteFile(sourcePath);
         return newObjectPath;
@@ -282,7 +299,7 @@ public class ResourceServiceImpl implements ResourceService {
                 .map(Item::objectName)
                 .collect(Collectors.toSet());
         sourceObjectsFullPaths.add(sourcePath.absolute());
-        checkCollisions(request, sourceObjectsFullPaths.toArray(new String[0]));
+        checkCollisions((fullPath) -> getFullTargetPath(fullPath, request), sourceObjectsFullPaths.toArray(new String[0]));
         sourceObjectsFullPaths.forEach(objectFullPath -> copyObject(objectFullPath, request));
         storageService.deleteDirectory(sourcePath);
     }
@@ -401,7 +418,7 @@ public class ResourceServiceImpl implements ResourceService {
     private boolean isArchive(InputStream fileInputStream) {
         try {
             return tika.detect(fileInputStream).equals("application/zip");
-        }catch (Exception e){
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }

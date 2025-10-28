@@ -15,7 +15,7 @@ public record UploadingFile(String relativePath,
     public static UploadingFile withKnownFileSize(UploadRequest request) throws IOException {
         MultipartFile fileToUpload =  request.file();
         return new UploadingFile(
-                fileToUpload.getName(),
+                request.targetDirectory() + fileToUpload.getResource().getFilename(),
                 fileToUpload.getContentType(),
                 fileToUpload.getInputStream(),
                 Optional.of(fileToUpload.getSize())
