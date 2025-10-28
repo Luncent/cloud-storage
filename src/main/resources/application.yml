@@ -1,3 +1,9 @@
+server:
+  port: 8081
+  tomcat:
+    max-part-count: -1
+
+
 spring:
   application:
    name: cloud_storage
@@ -10,13 +16,14 @@ spring:
     properties:
       hibernate:
         format_sql: true
-        show_sql: true
+        show_sql: false
   liquibase:
     change-log: db/changelog/changelog-master.xml
     enabled: true
   servlet:
     multipart:
-      max-file-size: 2MB
+      max-file-size: -1
+      max-request-size: -1
 
 minio:
   endpoint: "http://localhost:9000"
@@ -27,6 +34,8 @@ minio:
 cors:
   allowed-origins:
     - "http://localhost:8082"
+    - "http://localhost"
+    - "http://192.168.0.102"
 
 logging:
   level:

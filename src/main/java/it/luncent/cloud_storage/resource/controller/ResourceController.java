@@ -78,7 +78,8 @@ public class ResourceController {
     public ResponseEntity<List<ResourceMetadataResponse>> uploadResource(@RequestPart(name = "object") List<MultipartFile> objects,
                                                                          @RequestPart(required = false) String path) {
         List<UploadRequest> uploadRequests = objects.stream()
-                .map(file -> new UploadRequest(path, file))
+                //TODO подумать что сделать с путями мб фронт пофиксить
+                .map(file -> new UploadRequest(path == null ? "" : path, file))
                 .toList();
 
         return ResponseEntity
