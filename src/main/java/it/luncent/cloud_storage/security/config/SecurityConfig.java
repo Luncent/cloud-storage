@@ -46,7 +46,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> {
                     authorize.requestMatchers("/api/auth/sign-out").authenticated();
                     authorize.requestMatchers(
-                            "api/auth/**",
+                            "/api/auth/**",
                             "/free"
                     ).permitAll();
                     authorize.anyRequest().authenticated();

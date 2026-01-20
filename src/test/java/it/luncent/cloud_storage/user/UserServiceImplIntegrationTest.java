@@ -21,16 +21,16 @@ public class UserServiceImplIntegrationTest extends IntegrationTest {
     private EntityManager entityManager;
 
     @Test
-    void saveNotExistingUserLeadsToUserCreation(){
+    void saveNotExistingUserLeadsToUserCreation() {
         RegistrationRequest request = createRegistrationRequest();
         userServiceImpl.create(request);
-        assertDoesNotThrow(()-> userServiceImpl.loadUserByUsername(request.username()));
+        assertDoesNotThrow(() -> userServiceImpl.loadUserByUsername(request.username()));
     }
 
     @Test
-    void saveExistingUserLeadsToException(){
+    void saveExistingUserLeadsToException() {
         RegistrationRequest request = createRegistrationRequest();
         userServiceImpl.create(request);
-        assertThrows(UsernameExistsException.class, ()-> userServiceImpl.create(request));
+        assertThrows(UsernameExistsException.class, () -> userServiceImpl.create(request));
     }
 }

@@ -181,7 +181,6 @@ public class ResourceServiceImpl implements ResourceService {
                 .collect(toList());
     }
 
-    //TODO распараллелить
     @Override
     public List<ResourceMetadataResponse> upload(List<UploadRequest> requests) {
         return requests.stream()
@@ -369,23 +368,6 @@ public class ResourceServiceImpl implements ResourceService {
         );
         return resourcePath.relative();
     }
-
-    /*private PutObjectArgs buildPutObjectArgs(UploadingFile uploadingFile, ResourcePath resourcePath) {
-        if (uploadingFile.fileSize().isEmpty()) {
-            return PutObjectArgs.builder()
-                    .bucket(usersBucket)
-                    .object(resourcePath.absolute())
-                    .contentType(uploadingFile.contentType())
-                    .stream(uploadingFile.inputStream(), FILE_SIZE_NOT_AVAILABLE, 10 * MB)
-                    .build();
-        }
-        return PutObjectArgs.builder()
-                .bucket(usersBucket)
-                .object(resourcePath.absolute())
-                .contentType(uploadingFile.contentType())
-                .stream(uploadingFile.inputStream(), uploadingFile.fileSize().get(), FILE_SIZE_AVAILABLE)
-                .build();
-    }*/
 
     private List<String> uploadArchive(UploadRequest request) {
         List<String> uploadedResourcesRelativePaths = new ArrayList<>();

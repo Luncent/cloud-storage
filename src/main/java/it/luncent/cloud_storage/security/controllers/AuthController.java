@@ -1,5 +1,6 @@
 package it.luncent.cloud_storage.security.controllers;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import it.luncent.cloud_storage.security.model.request.AuthenticationRequest;
 import it.luncent.cloud_storage.security.model.request.RegistrationRequest;
 import it.luncent.cloud_storage.security.model.response.AuthenticationResponse;
@@ -19,6 +20,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
+
+    private final ObjectMapper objectMapper;
+
     private final AuthService authService;
 
     @PostMapping("/sign-in")
