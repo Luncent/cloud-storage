@@ -16,8 +16,6 @@ public interface ResourceService {
 
     void downloadResource(OutputStream outputStream, String path);
 
-    List<ResourceMetadataResponse> getDirectoryContents(String path);
-
     ResourceMetadataResponse getResourceMetadata(String path);
 
     ResourceMetadataResponse moveResource(MoveRequest request);

@@ -16,7 +16,7 @@ import io.minio.errors.ErrorResponseException;
 import io.minio.messages.DeleteError;
 import io.minio.messages.DeleteObject;
 import io.minio.messages.Item;
-import it.luncent.cloud_storage.common.constants.PopulationFilter;
+import it.luncent.cloud_storage.common.constants.PopulationSettings;
 import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 import it.luncent.cloud_storage.resource.util.ResourcePathUtil;
 import it.luncent.cloud_storage.security.service.AuthService;
@@ -104,7 +104,7 @@ public class StorageServiceImpl implements StorageService {
     @Override
     public void deleteDirectory(ResourcePath directoryPath) {
         List<Item> objects = new ArrayList<>();
-        PopulationFilter includeFilesAndMarkers = new PopulationFilter(false, true, true);
+        PopulationSettings includeFilesAndMarkers = new PopulationSettings(false, true, true);
         populateWithDirectoryObjectsAsync(directoryPath, objects, includeFilesAndMarkers);
         List<String> objectNames = objects.stream()
                 .map(Item::objectName)
@@ -186,7 +186,7 @@ public class StorageServiceImpl implements StorageService {
     }
 
     @Override
-    public void populateWithDirectoryObjects(ResourcePath directoryPath, List<Item> objects, PopulationFilter populationFilter) {
+    public void populateWithDirectoryObjects(ResourcePath directoryPath, List<Item> objects, PopulationSettings populationSettings) {
         try {
             Iterable<Result<Item>> results = getDirectoryContent(directoryPath);
             for (Result<Item> result : results) {
@@ -194,15 +194,15 @@ public class StorageServiceImpl implements StorageService {
                 String objectName = object.objectName();
                 log.debug("Found object {} for dir {}", objectName, directoryPath.absolute());
                 if (isDirectory(objectName)) {
-                    if(populationFilter.includeDirectories()){
+                    if(populationSettings.includeDirectories()){
                         objects.add(object);
                     }
                     ResourcePath nestedDirectoryPath = resourcePathUtil.getResourcePathFromAbsolute(objectName);
-                    populateWithDirectoryObjects(nestedDirectoryPath, objects, populationFilter);
+                    populateWithDirectoryObjects(nestedDirectoryPath, objects, populationSettings);
                     continue;
                 }
-                if (!isSkipMarker(populationFilter.includeMarkers(), objectName)) {
-                    if(populationFilter.includeFiles()){
+                if (!isSkipMarker(populationSettings.includeMarkers(), objectName)) {
+                    if(populationSettings.includeFiles()){
                         objects.add(object);
                     }
                 }
@@ -215,9 +215,9 @@ public class StorageServiceImpl implements StorageService {
     }
 
     @Override
-    public void populateWithDirectoryObjectsAsync(ResourcePath directoryPath, List<Item> objects, PopulationFilter populationFilter) {
+    public void populateWithDirectoryObjectsAsync(ResourcePath directoryPath, List<Item> objects, PopulationSettings populationSettings) {
         Long userId = authService.getCurrentUser().id();
-        ConcurrentObjectsExtractionAction extractionAction = new ConcurrentObjectsExtractionAction(directoryPath, objects, populationFilter, userId);
+        ConcurrentObjectsExtractionAction extractionAction = new ConcurrentObjectsExtractionAction(directoryPath, objects, populationSettings, userId);
         forkJoinPool.invoke(extractionAction);
     }
 
@@ -266,13 +266,13 @@ public class StorageServiceImpl implements StorageService {
 
         private final ResourcePath directoryPath;
         private final List<Item> objects;
-        private final PopulationFilter populationFilter;
+        private final PopulationSettings populationSettings;
         private final Long userId;
 
-        public ConcurrentObjectsExtractionAction(ResourcePath directoryPath, List<Item> objects, PopulationFilter populationFilter, Long userId) {
+        public ConcurrentObjectsExtractionAction(ResourcePath directoryPath, List<Item> objects, PopulationSettings populationSettings, Long userId) {
             this.directoryPath = directoryPath;
             this.objects = objects;
-            this.populationFilter = populationFilter;
+            this.populationSettings = populationSettings;
             this.userId = userId;
         }
 
@@ -285,16 +285,16 @@ public class StorageServiceImpl implements StorageService {
                     Item object = directoryObject.get();
                     String objectName = object.objectName();
                     if (isDirectory(objectName)) {
-                        if(populationFilter.includeDirectories()){
+                        if(populationSettings.includeDirectories()){
                             objects.add(object);
                         }
                         nestedDirectoriesPaths.add(resourcePathUtil.concurrentGetPathFromAbsolute(objectName, userId));
                         continue;
                     }
-                    if (isSkipMarker(populationFilter.includeMarkers(), objectName)) {
+                    if (isSkipMarker(populationSettings.includeMarkers(), objectName)) {
                         continue;
                     }
-                    if(populationFilter.includeFiles()){
+                    if(populationSettings.includeFiles()){
                         log.debug("adding file thread {}", Thread.currentThread().getName());
                         objects.add(object);
                     }
@@ -309,7 +309,7 @@ public class StorageServiceImpl implements StorageService {
 
         private void startRecursiveActions(List<ResourcePath> nestedDirectories) {
             List<ConcurrentObjectsExtractionAction> action = nestedDirectories.stream()
-                    .map(nestedDirectoryPath -> new ConcurrentObjectsExtractionAction(nestedDirectoryPath, objects, populationFilter, userId))
+                    .map(nestedDirectoryPath -> new ConcurrentObjectsExtractionAction(nestedDirectoryPath, objects, populationSettings, userId))
                     .toList();
             RecursiveAction.invokeAll(action);
         }

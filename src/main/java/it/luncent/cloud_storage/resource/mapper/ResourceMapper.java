@@ -1,6 +1,7 @@
 package it.luncent.cloud_storage.resource.mapper;
 
 import io.minio.StatObjectResponse;
+import io.minio.messages.Item;
 import it.luncent.cloud_storage.resource.constants.ResourceType;
 import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
@@ -25,7 +26,19 @@ public interface ResourceMapper {
         return new ResourceMetadataResponse(folderPath, folderName, null, ResourceType.DIRECTORY);
     }
 
+    //TODO убрать, не нужен этот метод, размер и имя можно и без него получить
     default ResourceMetadataResponse mapToFileResponse(ResourcePath resourcePath, StatObjectResponse objectMetadata) {
+        String relativePath = resourcePath.relative();
+        int lastSlashIndex = relativePath.lastIndexOf('/');
+        if(resourceIsInRootDirectory(lastSlashIndex)) {
+            return new ResourceMetadataResponse("/", relativePath, objectMetadata.size(), ResourceType.FILE);
+        }
+        String fileName = relativePath.substring(lastSlashIndex + 1);
+        String filePath = relativePath.substring(0, lastSlashIndex+1);
+        return new ResourceMetadataResponse(filePath, fileName, objectMetadata.size(), ResourceType.FILE);
+    }
+
+    default ResourceMetadataResponse mapToFileResponse(ResourcePath resourcePath, Item objectMetadata) {
         String relativePath = resourcePath.relative();
         int lastSlashIndex = relativePath.lastIndexOf('/');
         if(resourceIsInRootDirectory(lastSlashIndex)) {

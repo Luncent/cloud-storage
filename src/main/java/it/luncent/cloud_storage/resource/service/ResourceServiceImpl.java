@@ -3,10 +3,10 @@ package it.luncent.cloud_storage.resource.service;
 import io.minio.Result;
 import io.minio.StatObjectResponse;
 import io.minio.messages.Item;
-import it.luncent.cloud_storage.common.constants.PopulationFilter;
+import it.luncent.cloud_storage.common.constants.PopulationSettings;
 import it.luncent.cloud_storage.common.util.ObjectStorageUtil;
-import it.luncent.cloud_storage.resource.exception.DownloadException;
 import it.luncent.cloud_storage.resource.exception.ConflictException;
+import it.luncent.cloud_storage.resource.exception.DownloadException;
 import it.luncent.cloud_storage.resource.mapper.ResourceMapper;
 import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 import it.luncent.cloud_storage.resource.model.common.UploadingFile;
@@ -89,29 +89,6 @@ public class ResourceServiceImpl implements ResourceService {
         writeFileInputStreamToOutputStream(fileInputStream, outputStream);
     }
 
-    @Override
-    @SneakyThrows
-    public List<ResourceMetadataResponse> getDirectoryContents(String path) {
-        //TODO not found вынести чтоли в отдельный метод try-catch
-        try {
-            List<ResourceMetadataResponse> directoryContents = new ArrayList<>();
-            Iterable<Result<Item>> objects = storageService.getDirectoryContent(resourcePathUtil.getResourcePathFromRelative(path));
-            //TODO распараллелить
-            for (Result<Item> result : objects) {
-                String objectFullPath = result.get().objectName();
-                if (!ObjectStorageUtil.isMarker(objectFullPath)) {
-                    directoryContents.add(getResourceMetadata(resourcePathUtil.getRelativePath(objectFullPath)));
-                }
-            }
-            return directoryContents;
-        } catch (ResourceNotFoundException e) {
-            if (path.equals("")) {
-                return List.of();
-            }
-            throw e;
-        }
-    }
-
     //TODO think about exception handling (convert minio exceptions)
     @Override
     public ResourceMetadataResponse getResourceMetadata(String relativePath) {
@@ -144,12 +121,12 @@ public class ResourceServiceImpl implements ResourceService {
     public List<ResourceMetadataResponse> searchResource(Optional<String> query) {
         ResourcePath rootDirectory = resourcePathUtil.getResourcePathFromRelative(ROOT_DIRECTORY);
         List<Item> objects = new ArrayList<>();
-        PopulationFilter populationFilter = PopulationFilter.builder()
+        PopulationSettings populationSettings = PopulationSettings.builder()
                 .includeDirectories(true)
                 .includeMarkers(false)
                 .includeFiles(true)
                 .build();
-        storageService.populateWithDirectoryObjectsAsync(rootDirectory, objects, populationFilter);
+        storageService.populateWithDirectoryObjectsAsync(rootDirectory, objects, populationSettings);
 
         return query.map(searchQuery ->
                         objects.stream()
@@ -205,7 +182,7 @@ public class ResourceServiceImpl implements ResourceService {
         List<String> directoriesNames = new LinkedList<>();
         String fileName = request.file().getResource().getFilename();
         int lastSlashIndex;
-        while((lastSlashIndex = fileName.lastIndexOf('/')) != -1) {
+        while ((lastSlashIndex = fileName.lastIndexOf('/')) != -1) {
             fileName = fileName.substring(0, lastSlashIndex);
             directoriesNames.add(fileName.substring(0, lastSlashIndex));
         }
@@ -226,11 +203,11 @@ public class ResourceServiceImpl implements ResourceService {
     /**
      * @param sourceFullPath полный путь перемещаемого объекта
      *                       <pre>{@code
-     *                                                                                                                                                                                                                                                                                                                                                                 // Пример получения нового пути объекта, при перемещении папки
-     *                                                                                                                                                                                                                                                                                                                                                                 moveRequest = new MoveRequest(from="dir1/dir2/", to="dir3/")
-     *                                                                                                                                                                                                                                                                                                                                                                 fullTargetPath = moveObject("user-1-files/dir1/dir2/dir4/file.txt", moveRequest);
-     *                                                                                                                                                                                                                                                                                                                                                                 // fullTargetPath = user-1-files/dir3/dir4/file.txt
-     *                                                                                                                                                                                                                                                                                                                                                                 }</pre>
+     *                                                                                                                                                                                                                                                                                                                                                                                       // Пример получения нового пути объекта, при перемещении папки
+     *                                                                                                                                                                                                                                                                                                                                                                                       moveRequest = new MoveRequest(from="dir1/dir2/", to="dir3/")
+     *                                                                                                                                                                                                                                                                                                                                                                                       fullTargetPath = moveObject("user-1-files/dir1/dir2/dir4/file.txt", moveRequest);
+     *                                                                                                                                                                                                                                                                                                                                                                                       // fullTargetPath = user-1-files/dir3/dir4/file.txt
+     *                                                                                                                                                                                                                                                                                                                                                                                       }</pre>
      */
     private String getFullTargetPath(String sourceFullPath, MoveRequest request) {
         String sourcePathPrefix = resourcePathUtil.getResourcePathFromRelative(request.from()).absolute();
@@ -298,12 +275,12 @@ public class ResourceServiceImpl implements ResourceService {
 
     private void moveDirectory(MoveRequest request, ResourcePath sourcePath) {
         List<Item> objects = new ArrayList<>();
-        PopulationFilter populationFilter = PopulationFilter.builder()
+        PopulationSettings populationSettings = PopulationSettings.builder()
                 .includeDirectories(true)
                 .includeMarkers(false)
                 .includeFiles(true)
                 .build();
-        storageService.populateWithDirectoryObjectsAsync(sourcePath, objects, populationFilter);
+        storageService.populateWithDirectoryObjectsAsync(sourcePath, objects, populationSettings);
         Set<String> sourceObjectsFullPaths = objects.stream()
                 .map(Item::objectName)
                 .collect(Collectors.toSet());
@@ -405,14 +382,6 @@ public class ResourceServiceImpl implements ResourceService {
     private String createEmptyDirectory(ResourcePath path) {
         storageService.createEmptyDirectory(path);
         return path.relative();
-    }
-
-    private boolean isArchive(InputStream fileInputStream) {
-        try {
-            return tika.detect(fileInputStream).equals("application/zip");
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
     }
 
 }

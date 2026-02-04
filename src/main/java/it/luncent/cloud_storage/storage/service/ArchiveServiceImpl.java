@@ -1,7 +1,7 @@
 package it.luncent.cloud_storage.storage.service;
 
 import io.minio.messages.Item;
-import it.luncent.cloud_storage.common.constants.PopulationFilter;
+import it.luncent.cloud_storage.common.constants.PopulationSettings;
 import it.luncent.cloud_storage.resource.exception.DownloadException;
 import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 import it.luncent.cloud_storage.resource.util.ResourcePathUtil;
@@ -31,7 +31,7 @@ import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.isDirectory
 @RequiredArgsConstructor
 public class ArchiveServiceImpl implements ArchiveService {
 
-    private static final PopulationFilter POPULATION_FILTER = PopulationFilter.builder()
+    private static final PopulationSettings POPULATION_FILTER = PopulationSettings.builder()
             .includeDirectories(true)
             .includeMarkers(false)
             .includeFiles(true)
