@@ -9,28 +9,28 @@ import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 
 import java.io.InputStream;
 import java.util.List;
+import java.util.Optional;
 
 //TODO change parameters and return types
-//TODO remove bucket creation in code do it in docker
 public interface StorageService {
-
-    String createEmptyDirectory(ResourcePath directoryPath);
 
     ObjectWriteResponse copyObject(ResourcePath from, ResourcePath to);
 
-    void deleteDirectory(ResourcePath directoryPath);
-
-    void deleteFile(ResourcePath filePath);
+    void delete(ResourcePath filePath);
 
     InputStream downloadFile(ResourcePath filePath);
 
     Iterable<Result<Item>> getDirectoryContent(ResourcePath directoryPath);
 
-    StatObjectResponse getObjectMetadata(ResourcePath objectPath);
+    Optional<StatObjectResponse> getObjectMetadata(ResourcePath objectPath);
 
     void populateWithDirectoryObjects(ResourcePath directoryPath, List<Item> objects, PopulationSettings populationSettings);
 
     void populateWithDirectoryObjectsAsync(ResourcePath directoryPath, List<Item> objects, PopulationSettings populationSettings);
 
     void uploadFile(ResourcePath filePath, InputStream inputStream, String contentType);
+
+    void uploadFile(ResourcePath filePath, InputStream inputStream);
+
+    void deleteFilesBatch(String bucketName, List<String> objectNames);
 }

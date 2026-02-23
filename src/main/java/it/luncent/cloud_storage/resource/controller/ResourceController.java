@@ -36,7 +36,7 @@ public class ResourceController {
                                                                         @NotNull(message = "request does not have path attribute")
                                                                         @Pattern(regexp = "[a-zA-Z_а-я-А-Я0-9/.]+", message = "path contains wrong symbols")
                                                                         String path) {
-        return ResponseEntity.ok(resourceService.getResourceMetadata(path));
+        return ResponseEntity.ok(resourceService.getMetadata(path));
     }
 
     @GetMapping("/download")
@@ -78,7 +78,7 @@ public class ResourceController {
     public ResponseEntity<List<ResourceMetadataResponse>> uploadResource(@RequestPart(name = "object") List<MultipartFile> objects,
                                                                          @RequestPart(required = false) String path) {
         List<UploadRequest> uploadRequests = objects.stream()
-                //TODO подумать что сделать с путями мб фронт пофиксить
+                //TODO мб фронт пофиксить
                 .map(file -> new UploadRequest(path == null ? "" : path, file))
                 .toList();
 

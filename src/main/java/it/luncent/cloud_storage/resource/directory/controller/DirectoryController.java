@@ -1,6 +1,6 @@
-package it.luncent.cloud_storage.directory_resource.controller;
+package it.luncent.cloud_storage.resource.directory.controller;
 
-import it.luncent.cloud_storage.directory_resource.service.DirectoryService;
+import it.luncent.cloud_storage.resource.directory.service.DirectoryService;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
 import it.luncent.cloud_storage.resource.validation.IsDirectory;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +25,7 @@ public class DirectoryController {
     public ResponseEntity<List<ResourceMetadataResponse>> getDirectoryContent(@RequestParam
                                                                               @Validated
                                                                               @IsDirectory String path) {
-        return ResponseEntity.ok(directoryService.getDirectoryContents(path));
+        return ResponseEntity.ok(directoryService.getContents(path));
     }
 
     @PostMapping

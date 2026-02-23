@@ -10,13 +10,11 @@ import java.util.Optional;
 
 public interface ResourceService {
 
-    ResourceMetadataResponse createEmptyDirectory(String path);
+    ResourceMetadataResponse getMetadata(String path);
 
     void deleteResource(String path);
 
     void downloadResource(OutputStream outputStream, String path);
-
-    ResourceMetadataResponse getResourceMetadata(String path);
 
     ResourceMetadataResponse moveResource(MoveRequest request);
 

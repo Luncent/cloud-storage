@@ -27,11 +27,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Optional;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.RecursiveAction;
 
@@ -49,8 +49,6 @@ public class StorageServiceImpl implements StorageService {
     private static final String FOLDER_NOT_FOUND_TEMPLATE = "folder %s not found";
     private static final String OBJECT_NOT_FOUND_TEMPLATE = "object %s not found";
     private static final Integer FILE_SIZE_NOT_KNOWN = -1;
-    private static final Integer FILE_SIZE_IS_KNOWN = -1;
-    private static final Integer EMPTY_FOLDER_SIZE = 0;
     private static final Long MB = 1024L * 1024L;
     private static final Long PART_SIZE = 10 * MB;
 
@@ -58,22 +56,6 @@ public class StorageServiceImpl implements StorageService {
     private final ResourcePathUtil resourcePathUtil;
     private final ForkJoinPool forkJoinPool;
     private final AuthService authService;
-
-    @Override
-    public String createEmptyDirectory(ResourcePath directoryPath) {
-        try {
-            ObjectWriteResponse response = minioClient.putObject(
-                    PutObjectArgs.builder()
-                            .bucket(directoryPath.bucketName())
-                            .object(directoryPath.absolute() + EMPTY_DIRECTORY_MARKER)
-                            .stream(new ByteArrayInputStream(new byte[EMPTY_FOLDER_SIZE]), EMPTY_FOLDER_SIZE, FILE_SIZE_IS_KNOWN)
-                            .build()
-            );
-            return response.object();
-        } catch (Exception ex) {
-            throw new StorageException(ex.getMessage(), ex);
-        }
-    }
 
     @Override
     public ObjectWriteResponse copyObject(ResourcePath from, ResourcePath to) {
@@ -100,21 +82,8 @@ public class StorageServiceImpl implements StorageService {
         }
     }
 
-    //TODO нужно ли удалять файлы директории для ее удаления? просто директорию нельзя удалить?
     @Override
-    public void deleteDirectory(ResourcePath directoryPath) {
-        List<Item> objects = new ArrayList<>();
-        PopulationSettings includeFilesAndMarkers = new PopulationSettings(false, true, true);
-        populateWithDirectoryObjectsAsync(directoryPath, objects, includeFilesAndMarkers);
-        List<String> objectNames = objects.stream()
-                .map(Item::objectName)
-                .toList();
-        deleteFilesBatch(directoryPath.bucketName(), objectNames);
-    }
-
-    @Override
-    public void deleteFile(ResourcePath filePath) {
-        checkRequestedPathForEmptyDirectoryTag(filePath);
+    public void delete(ResourcePath filePath) {
         try {
             minioClient.removeObject(
                     RemoveObjectArgs.builder()
@@ -166,18 +135,18 @@ public class StorageServiceImpl implements StorageService {
     }
 
     @Override
-    public StatObjectResponse getObjectMetadata(ResourcePath objectPath) {
+    public Optional<StatObjectResponse> getObjectMetadata(ResourcePath objectPath) {
         checkRequestedPathForEmptyDirectoryTag(objectPath);
         try {
-            return minioClient.statObject(
+            return Optional.of(minioClient.statObject(
                     StatObjectArgs.builder()
                             .bucket(objectPath.bucketName())
                             .object(objectPath.absolute())
                             .build()
-            );
+            ));
         } catch (ErrorResponseException e) {
             if (e.response().code() == 404) {
-                throw new ResourceNotFoundException(objectPath.relative() + " not found", e);
+                return Optional.empty();
             }
             throw new StorageException(e.getMessage(), e);
         } catch (Exception e) {
@@ -194,7 +163,7 @@ public class StorageServiceImpl implements StorageService {
                 String objectName = object.objectName();
                 log.debug("Found object {} for dir {}", objectName, directoryPath.absolute());
                 if (isDirectory(objectName)) {
-                    if(populationSettings.includeDirectories()){
+                    if (populationSettings.includeDirectories()) {
                         objects.add(object);
                     }
                     ResourcePath nestedDirectoryPath = resourcePathUtil.getResourcePathFromAbsolute(objectName);
@@ -202,7 +171,7 @@ public class StorageServiceImpl implements StorageService {
                     continue;
                 }
                 if (!isSkipMarker(populationSettings.includeMarkers(), objectName)) {
-                    if(populationSettings.includeFiles()){
+                    if (populationSettings.includeFiles()) {
                         objects.add(object);
                     }
                 }
@@ -223,6 +192,7 @@ public class StorageServiceImpl implements StorageService {
 
     @Override
     public void uploadFile(ResourcePath filePath, InputStream inputStream, String contentType) {
+        //TODO проверка лишняя. Ее делать нужно в сервисе файла
         checkRequestedPathForEmptyDirectoryTag(filePath);
         try {
             minioClient.putObject(
@@ -238,12 +208,22 @@ public class StorageServiceImpl implements StorageService {
         }
     }
 
-    private void checkRequestedPathForEmptyDirectoryTag(ResourcePath objectPath) {
-        if (isMarker(objectPath.absolute())) {
-            throw new ReservedNameException(EMPTY_DIRECTORY_MARKER + " is reserved");
+    @Override
+    public void uploadFile(ResourcePath filePath, InputStream inputStream) {
+        try {
+            minioClient.putObject(
+                    PutObjectArgs.builder()
+                            .bucket(filePath.bucketName())
+                            .object(filePath.absolute())
+                            .stream(inputStream, FILE_SIZE_NOT_KNOWN, PART_SIZE)
+                            .build()
+            );
+        } catch (Exception ex) {
+            throw new StorageException(ex.getMessage(), ex);
         }
     }
 
+    @Override
     public void deleteFilesBatch(String bucketName, List<String> objectNames) {
         List<DeleteObject> deleteObjects = objectNames.stream()
                 .map(DeleteObject::new)
@@ -256,6 +236,12 @@ public class StorageServiceImpl implements StorageService {
         );
         results.forEach(result -> {
         });
+    }
+
+    private void checkRequestedPathForEmptyDirectoryTag(ResourcePath objectPath) {
+        if (isMarker(objectPath.absolute())) {
+            throw new ReservedNameException(EMPTY_DIRECTORY_MARKER + " is reserved");
+        }
     }
 
     private boolean isSkipMarker(boolean includeMarkers, String objectName) {
@@ -285,7 +271,7 @@ public class StorageServiceImpl implements StorageService {
                     Item object = directoryObject.get();
                     String objectName = object.objectName();
                     if (isDirectory(objectName)) {
-                        if(populationSettings.includeDirectories()){
+                        if (populationSettings.includeDirectories()) {
                             objects.add(object);
                         }
                         nestedDirectoriesPaths.add(resourcePathUtil.concurrentGetPathFromAbsolute(objectName, userId));
@@ -294,7 +280,7 @@ public class StorageServiceImpl implements StorageService {
                     if (isSkipMarker(populationSettings.includeMarkers(), objectName)) {
                         continue;
                     }
-                    if(populationSettings.includeFiles()){
+                    if (populationSettings.includeFiles()) {
                         log.debug("adding file thread {}", Thread.currentThread().getName());
                         objects.add(object);
                     }

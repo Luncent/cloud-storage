@@ -29,7 +29,7 @@ public class ResourcePathUtil {
         Long currentUserId = authService.getCurrentUser().id();
 
         if(!StringUtils.isEmpty(relativePath)) {
-            //почемуто фронт на запрос удаления присылает путь который начинается со / а во всех других случаях такого нет
+            //почемуто фронт на запрос удаления присылает путь который начинается с / а во всех других случаях такого нет
             if(relativePath.startsWith(DIRECTORY_SUFFIX)) {
                 relativePath = relativePath.substring(DIRECTORY_SUFFIX.length());
             }

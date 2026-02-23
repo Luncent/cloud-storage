@@ -3,7 +3,6 @@ server:
   tomcat:
     max-part-count: -1
 
-
 spring:
   application:
    name: cloud_storage
@@ -40,5 +39,3 @@ cors:
 logging:
   level:
     org.springframework.security.authentication.dao: DEBUG
-    it.luncent.cloud_storage.config.it.luncent.cloud_storage.config.minio.MinioLoggingInterceptor: DEBUG
-    it.luncent.cloud_storage.storage.service.StorageServiceImpl: DEBUG

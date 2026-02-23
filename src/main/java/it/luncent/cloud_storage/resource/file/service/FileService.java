@@ -1,0 +1,17 @@
+package it.luncent.cloud_storage.resource.file.service;
+
+import it.luncent.cloud_storage.resource.model.request.MoveRequest;
+import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
+
+import java.io.OutputStream;
+
+public interface FileService {
+
+    ResourceMetadataResponse getMetadata(String path);
+
+    void delete(String path);
+
+    void download(OutputStream outputStream, String path);
+
+    ResourceMetadataResponse move(MoveRequest request);
+}
