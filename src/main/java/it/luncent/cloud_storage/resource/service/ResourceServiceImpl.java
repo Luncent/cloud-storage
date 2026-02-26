@@ -1,7 +1,6 @@
 package it.luncent.cloud_storage.resource.service;
 
 import io.minio.Result;
-import io.minio.StatObjectResponse;
 import io.minio.messages.Item;
 import it.luncent.cloud_storage.common.constants.PopulationSettings;
 import it.luncent.cloud_storage.resource.directory.service.DirectoryService;
@@ -76,17 +75,10 @@ public class ResourceServiceImpl implements ResourceService {
 
     @Override
     public ResourceMetadataResponse moveResource(MoveRequest request) {
-        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(request.from());
-
         if (isDirectory(request.from())) {
-            moveDirectory(request, resourcePath);
-            String newDirectoryAbsolutePath = getFullTargetPath(resourcePath.absolute(), request);
-            String newDirectoryRelativePath = resourcePathUtil.getRelativePath(newDirectoryAbsolutePath);
-            return getMetadata(newDirectoryRelativePath);
+            return directoryService.move(request);
         }
-
-        ResourcePath newResourcePath = moveFile(request, resourcePath);
-        return getMetadata(newResourcePath.relative());
+        return fileService.move(request);
     }
 
     @Override
@@ -144,7 +136,6 @@ public class ResourceServiceImpl implements ResourceService {
         return directoriesToCreate;
     }
 
-
     private List<String> getDirectoriesRelativePaths(UploadRequest request) {
         @SuppressWarnings("ConstantConditions")
         List<String> directoriesNames = new LinkedList<>();
@@ -157,21 +148,6 @@ public class ResourceServiceImpl implements ResourceService {
         return directoriesNames.stream()
                 .map(name -> request.targetDirectory() + name + "/")
                 .collect(Collectors.toList());
-    }
-
-    /**
-     * @param sourceFullPath полный путь перемещаемого объекта
-     *                       <pre>{@code
-     *                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             // Пример получения нового пути объекта, при перемещении папки
-     *                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             moveRequest = new MoveRequest(from="dir1/dir2/", to="dir3/")
-     *                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             fullTargetPath = moveObject("user-1-files/dir1/dir2/dir4/file.txt", moveRequest);
-     *                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             // fullTargetPath = user-1-files/dir3/dir4/file.txt
-     *                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             }</pre>
-     */
-    private String getFullTargetPath(String sourceFullPath, MoveRequest request) {
-        String sourcePathPrefix = resourcePathUtil.getResourcePathFromRelative(request.from()).absolute();
-        String targetPathPrefix = resourcePathUtil.getResourcePathFromRelative(request.to()).absolute();
-        return targetPathPrefix + (sourceFullPath.substring(sourcePathPrefix.length()));
     }
 
     private void checkCollisions(String... filePaths) {
@@ -215,56 +191,6 @@ public class ResourceServiceImpl implements ResourceService {
         }
     }
 
-    private ResourcePath moveFile(MoveRequest request, ResourcePath sourcePath) {
-        StatObjectResponse response = storageService.getObjectMetadata(sourcePath);
-        String objectSourceFullPath = response.object();
-        checkCollisions(getFullTargetPath(objectSourceFullPath, request));
-        ResourcePath newObjectPath = copyObject(objectSourceFullPath, request);
-        storageService.delete(sourcePath);
-        return newObjectPath;
-    }
-
-    private void moveDirectory(MoveRequest request, ResourcePath sourcePath) {
-        List<Item> objects = new ArrayList<>();
-        PopulationSettings populationSettings = PopulationSettings.builder()
-                .includeDirectories(true)
-                .includeMarkers(false)
-                .includeFiles(true)
-                .build();
-        storageService.populateWithDirectoryObjectsAsync(sourcePath, objects, populationSettings);
-        Set<String> sourceObjectsFullPaths = objects.stream()
-                .map(item -> getFullTargetPath(item.objectName(), request))
-                .collect(Collectors.toSet());
-        sourceObjectsFullPaths.add(getFullTargetPath(sourcePath.absolute(), request));
-        checkCollisions(sourceObjectsFullPaths.toArray(new String[0]));
-        sourceObjectsFullPaths.forEach(objectFullPath -> copyObject(objectFullPath, request));
-        directoryService.delete(sourcePath.relative());
-    }
-
-    //TODO удалить после рефакторинга
-    public ResourceMetadataResponse createEmptyDirectory(String relativePath) {
-        if (directoryExists(relativePath)) {
-            throw new ConflictException(String.format(OBJECT_EXISTS_TEMPLATE, relativePath));
-        }
-        ResourcePath directoryPath = resourcePathUtil.getResourcePathFromRelative(relativePath);
-        ResourceMetadataResponse response = directoryService.createEmptyDirectory(directoryPath.absolute());
-        return getMetadata(response.path());
-    }
-
-    private ResourcePath copyObject(String sourceObjectFullPath, MoveRequest request) {
-        String targetFullPath = getFullTargetPath(sourceObjectFullPath, request);
-        ResourcePath toPath = resourcePathUtil.getResourcePathFromAbsolute(targetFullPath);
-        if (isDirectory(targetFullPath)) {
-            if (!directoryExists(toPath.relative())) {
-                createEmptyDirectory(toPath.relative());
-            }
-            return toPath;
-        }
-        ResourcePath fromPath = resourcePathUtil.getResourcePathFromAbsolute(sourceObjectFullPath);
-        storageService.copyObject(fromPath, toPath);
-        return toPath;
-    }
-
     private boolean resourceNameMatchesQuery(String resourceName, String query) {
         if (isDirectory(resourceName)) {
             int length = resourceName.length();
@@ -301,11 +227,6 @@ public class ResourceServiceImpl implements ResourceService {
                 uploadingFile.contentType()
         );
         return resourcePath.relative();
-    }
-
-    private String createEmptyDirectory(ResourcePath path) {
-        directoryService.createEmptyDirectory(path.absolute());
-        return path.relative();
     }
 
 }

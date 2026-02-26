@@ -1,6 +1,5 @@
 package it.luncent.cloud_storage.resource.file.service;
 
-import io.minio.ObjectWriteResponse;
 import io.minio.StatObjectResponse;
 import it.luncent.cloud_storage.resource.exception.ConflictException;
 import it.luncent.cloud_storage.resource.exception.DownloadException;
@@ -11,7 +10,6 @@ import it.luncent.cloud_storage.resource.model.request.MoveRequest;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
 import it.luncent.cloud_storage.resource.util.ResourcePathUtil;
 import it.luncent.cloud_storage.storage.exception.ReservedNameException;
-import it.luncent.cloud_storage.storage.exception.ResourceNotFoundException;
 import it.luncent.cloud_storage.storage.service.StorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -22,6 +20,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import static it.luncent.cloud_storage.common.constants.ObjectStorageConstants.EMPTY_DIRECTORY_MARKER;
 import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.isDirectory;
@@ -52,6 +51,11 @@ public class FileServiceImpl implements FileService {
     }
 
     @Override
+    public void deleteFilesAndMarkersBatch(String bucket, Set<String> paths) {
+        storageService.deleteFilesBatch(bucket, paths);
+    }
+
+    @Override
     public void download(OutputStream outputStream, String path) {
         //TODO add check for existence
         ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(path);
@@ -69,6 +73,17 @@ public class FileServiceImpl implements FileService {
         ResourcePath newObjectPath = copyObject(sourceObjectFullPath, request);
         delete(resourcePath.relative());
         return getMetadata(newObjectPath.relative());
+    }
+
+    @Override
+    public boolean exists(String path) {
+        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(path);
+        try {
+            findMetadataByPath(resourcePath);
+            return true;
+        } catch (FileNotFoundException e) {
+            return false;
+        }
     }
 
     private StatObjectResponse findMetadataByPath(ResourcePath path) {
@@ -107,7 +122,7 @@ public class FileServiceImpl implements FileService {
             if (isDirectory(targetObjectFullPath)) {
                 continue;
             }
-            if (fileExists(targetObjectFullPath)) {
+            if (exists(resourcePathUtil.getRelativePath(targetObjectFullPath))) {
                 errors.add(String.format(FILE_EXISTS_TEMPLATE, resourcePathUtil.getRelativePath(targetObjectFullPath)));
             }
         }
@@ -120,16 +135,6 @@ public class FileServiceImpl implements FileService {
         String sourcePathPrefix = resourcePathUtil.getResourcePathFromRelative(request.from()).absolute();
         String targetPathPrefix = resourcePathUtil.getResourcePathFromRelative(request.to()).absolute();
         return targetPathPrefix + (sourceFullPath.substring(sourcePathPrefix.length()));
-    }
-
-    private boolean fileExists(String objectFullPath) {
-        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromAbsolute(objectFullPath);
-        try {
-            storageService.getObjectMetadata(resourcePath);
-            return true;
-        } catch (ResourceNotFoundException e) {
-            return false;
-        }
     }
 
     private ResourcePath copyObject(String sourceObjectFullPath, MoveRequest request) {

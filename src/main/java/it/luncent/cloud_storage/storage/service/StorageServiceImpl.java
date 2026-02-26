@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.RecursiveAction;
 
@@ -224,7 +225,7 @@ public class StorageServiceImpl implements StorageService {
     }
 
     @Override
-    public void deleteFilesBatch(String bucketName, List<String> objectNames) {
+    public void deleteFilesBatch(String bucketName, Set<String> objectNames) {
         List<DeleteObject> deleteObjects = objectNames.stream()
                 .map(DeleteObject::new)
                 .toList();

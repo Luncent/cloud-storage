@@ -10,6 +10,7 @@ import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 import java.io.InputStream;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 //TODO change parameters and return types
 public interface StorageService {
@@ -32,5 +33,5 @@ public interface StorageService {
 
     void uploadFile(ResourcePath filePath, InputStream inputStream);
 
-    void deleteFilesBatch(String bucketName, List<String> objectNames);
+    void deleteFilesBatch(String bucketName, Set<String> objectNames);
 }

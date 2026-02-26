@@ -13,6 +13,7 @@
 ## По коду 
 
 - storageService.deleteFilesBatch не отлавливаются ошибки 
+- storageService.populateWithDirectoryObjectsAsync вернуть массив в ответе, а не параметром
 
 ## Другое
 
