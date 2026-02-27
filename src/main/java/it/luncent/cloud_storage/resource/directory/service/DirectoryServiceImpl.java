@@ -4,6 +4,7 @@ import io.minio.Result;
 import io.minio.messages.Item;
 import it.luncent.cloud_storage.common.constants.PopulationSettings;
 import it.luncent.cloud_storage.common.util.ObjectStorageUtil;
+import it.luncent.cloud_storage.resource.directory.exception.DirectoryNotFoundException;
 import it.luncent.cloud_storage.resource.directory.mapper.DirectoryMapper;
 import it.luncent.cloud_storage.resource.exception.ConflictException;
 import it.luncent.cloud_storage.resource.file.service.FileService;
@@ -25,16 +26,16 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static it.luncent.cloud_storage.common.constants.ObjectStorageConstants.EMPTY_DIRECTORY_MARKER;
 import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.isDirectory;
 
 @Service
 @RequiredArgsConstructor
 public class DirectoryServiceImpl implements DirectoryService {
 
+    public static final String EMPTY_DIRECTORY_MARKER = "empty-folder-tag";
     private static final String DIRECTORY_EXISTS_TEMPLATE = "directory %s already exists";
+    private static final String DIRECTORY_NOT_FOUND_TEMPLATE = "directory %s already exists";
     private static final String FILE_EXISTS_TEMPLATE = "file %s already exists";
-    private static final Integer FILE_SIZE_IS_KNOWN = -1;
     private static final Integer EMPTY_FOLDER_SIZE = 0;
 
     private final ArchiveService archiveService;
@@ -46,7 +47,9 @@ public class DirectoryServiceImpl implements DirectoryService {
     @Override
     public ResourceMetadataResponse getMetadata(String path) {
         ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(path);
-        storageService.getDirectoryContent(resourcePath);
+        if (exists(path)) {
+            throw new DirectoryNotFoundException(String.format(DIRECTORY_NOT_FOUND_TEMPLATE, path));
+        }
         return directoryMapper.mapToResponse(resourcePath.relative());
     }
 
@@ -65,12 +68,16 @@ public class DirectoryServiceImpl implements DirectoryService {
 
     @Override
     public ResourceMetadataResponse createEmptyDirectory(String relativePath) {
-        if (directoryExists(relativePath)) {
-            throw new ConflictException(String.format(DIRECTORY_EXISTS_TEMPLATE, relativePath));
+        if (exists(relativePath)) {
+            throw new ConflictException(String.format(DIRECTORY_NOT_FOUND_TEMPLATE, relativePath));
         }
-        ResourcePath directoryPath = resourcePathUtil.getResourcePathFromRelative(relativePath);
+        return directoryMapper.mapToResponse(createEmptyDirectoryIgnoringConflicts(relativePath));
+    }
+
+    private String createEmptyDirectoryIgnoringConflicts(String relativePath) {
+        ResourcePath directoryPath = resourcePathUtil.getResourcePathFromRelative(relativePath + EMPTY_DIRECTORY_MARKER);
         storageService.uploadFile(directoryPath, new ByteArrayInputStream(new byte[EMPTY_FOLDER_SIZE]));
-        return getMetadata(directoryPath.relative());
+        return relativePath;
     }
 
     @Override
@@ -101,6 +108,13 @@ public class DirectoryServiceImpl implements DirectoryService {
         return getMetadata(newDirectoryRelativePath);
     }
 
+    @Override
+    public boolean exists(String relativeObjectPath) {
+        ResourcePath resourcePath = resourcePathUtil
+                .getResourcePathFromRelative(relativeObjectPath + EMPTY_DIRECTORY_MARKER);
+        return fileService.exists(resourcePath.relative());
+    }
+
     private Iterable<Result<Item>> getDirectoryContent(String path) {
         try {
             return storageService.getDirectoryContent(resourcePathUtil.getResourcePathFromRelative(path));
@@ -127,21 +141,6 @@ public class DirectoryServiceImpl implements DirectoryService {
             return directoryMapper.mapToResponse(resourcePath.relative());
         }
         return directoryMapper.mapToFileResponse(resourcePath, item);
-    }
-
-    private boolean directoryExists(String relativeObjectPath) {
-        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(relativeObjectPath);
-        try {
-            Iterable<Result<Item>> results = storageService.getDirectoryContent(resourcePath);
-            for (Result<Item> result : results) {
-                if (result.get().objectName().endsWith(EMPTY_DIRECTORY_MARKER)) {
-                    return true;
-                }
-            }
-            return false;
-        } catch (Exception e) {
-            return false;
-        }
     }
 
     private void moveDirectory(MoveRequest request, ResourcePath sourcePath) {
@@ -186,9 +185,7 @@ public class DirectoryServiceImpl implements DirectoryService {
         String targetFullPath = getFullTargetPath(sourceObjectFullPath, request.from(), request.to());
         ResourcePath toPath = resourcePathUtil.getResourcePathFromAbsolute(targetFullPath);
         if (isDirectory(targetFullPath)) {
-            if (!directoryExists(toPath.relative())) {
-                createEmptyDirectory(toPath.relative());
-            }
+            createEmptyDirectoryIgnoringConflicts(toPath.relative());
             return toPath;
         }
         ResourcePath fromPath = resourcePathUtil.getResourcePathFromAbsolute(sourceObjectFullPath);

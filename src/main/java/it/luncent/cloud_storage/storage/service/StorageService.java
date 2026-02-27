@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-//TODO change parameters and return types
 public interface StorageService {
 
     ObjectWriteResponse copyObject(ResourcePath from, ResourcePath to);
@@ -31,7 +30,7 @@ public interface StorageService {
 
     void uploadFile(ResourcePath filePath, InputStream inputStream, String contentType);
 
-    void uploadFile(ResourcePath filePath, InputStream inputStream);
+    ObjectWriteResponse uploadFile(ResourcePath filePath, InputStream inputStream);
 
     void deleteFilesBatch(String bucketName, Set<String> objectNames);
 }

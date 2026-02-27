@@ -20,7 +20,6 @@ import it.luncent.cloud_storage.common.constants.PopulationSettings;
 import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 import it.luncent.cloud_storage.resource.util.ResourcePathUtil;
 import it.luncent.cloud_storage.security.service.AuthService;
-import it.luncent.cloud_storage.storage.exception.ReservedNameException;
 import it.luncent.cloud_storage.storage.exception.ResourceNotFoundException;
 import it.luncent.cloud_storage.storage.exception.StorageException;
 import lombok.RequiredArgsConstructor;
@@ -36,7 +35,6 @@ import java.util.Set;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.RecursiveAction;
 
-import static it.luncent.cloud_storage.common.constants.ObjectStorageConstants.EMPTY_DIRECTORY_MARKER;
 import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.isDirectory;
 import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.isMarker;
 import static java.lang.String.format;
@@ -99,7 +97,6 @@ public class StorageServiceImpl implements StorageService {
 
     @Override
     public InputStream downloadFile(ResourcePath filePath) {
-        checkRequestedPathForEmptyDirectoryTag(filePath);
         try {
             return minioClient.getObject(
                     GetObjectArgs.builder()
@@ -137,7 +134,6 @@ public class StorageServiceImpl implements StorageService {
 
     @Override
     public Optional<StatObjectResponse> getObjectMetadata(ResourcePath objectPath) {
-        checkRequestedPathForEmptyDirectoryTag(objectPath);
         try {
             return Optional.of(minioClient.statObject(
                     StatObjectArgs.builder()
@@ -187,14 +183,12 @@ public class StorageServiceImpl implements StorageService {
     @Override
     public void populateWithDirectoryObjectsAsync(ResourcePath directoryPath, List<Item> objects, PopulationSettings populationSettings) {
         Long userId = authService.getCurrentUser().id();
-        ConcurrentObjectsExtractionAction extractionAction = new ConcurrentObjectsExtractionAction(directoryPath, objects, populationSettings, userId);
+        ObjectsExtractionAction extractionAction = new ObjectsExtractionAction(directoryPath, objects, populationSettings, userId);
         forkJoinPool.invoke(extractionAction);
     }
 
     @Override
     public void uploadFile(ResourcePath filePath, InputStream inputStream, String contentType) {
-        //TODO проверка лишняя. Ее делать нужно в сервисе файла
-        checkRequestedPathForEmptyDirectoryTag(filePath);
         try {
             minioClient.putObject(
                     PutObjectArgs.builder()
@@ -210,9 +204,9 @@ public class StorageServiceImpl implements StorageService {
     }
 
     @Override
-    public void uploadFile(ResourcePath filePath, InputStream inputStream) {
+    public ObjectWriteResponse uploadFile(ResourcePath filePath, InputStream inputStream) {
         try {
-            minioClient.putObject(
+            return minioClient.putObject(
                     PutObjectArgs.builder()
                             .bucket(filePath.bucketName())
                             .object(filePath.absolute())
@@ -239,24 +233,18 @@ public class StorageServiceImpl implements StorageService {
         });
     }
 
-    private void checkRequestedPathForEmptyDirectoryTag(ResourcePath objectPath) {
-        if (isMarker(objectPath.absolute())) {
-            throw new ReservedNameException(EMPTY_DIRECTORY_MARKER + " is reserved");
-        }
-    }
-
     private boolean isSkipMarker(boolean includeMarkers, String objectName) {
         return !includeMarkers && isMarker(objectName);
     }
 
-    private class ConcurrentObjectsExtractionAction extends RecursiveAction {
+    private class ObjectsExtractionAction extends RecursiveAction {
 
         private final ResourcePath directoryPath;
         private final List<Item> objects;
         private final PopulationSettings populationSettings;
         private final Long userId;
 
-        public ConcurrentObjectsExtractionAction(ResourcePath directoryPath, List<Item> objects, PopulationSettings populationSettings, Long userId) {
+        public ObjectsExtractionAction(ResourcePath directoryPath, List<Item> objects, PopulationSettings populationSettings, Long userId) {
             this.directoryPath = directoryPath;
             this.objects = objects;
             this.populationSettings = populationSettings;
@@ -295,8 +283,8 @@ public class StorageServiceImpl implements StorageService {
         }
 
         private void startRecursiveActions(List<ResourcePath> nestedDirectories) {
-            List<ConcurrentObjectsExtractionAction> action = nestedDirectories.stream()
-                    .map(nestedDirectoryPath -> new ConcurrentObjectsExtractionAction(nestedDirectoryPath, objects, populationSettings, userId))
+            List<ObjectsExtractionAction> action = nestedDirectories.stream()
+                    .map(nestedDirectoryPath -> new ObjectsExtractionAction(nestedDirectoryPath, objects, populationSettings, userId))
                     .toList();
             RecursiveAction.invokeAll(action);
         }

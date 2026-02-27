@@ -31,6 +31,7 @@ import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.isMarker;
 public class FileServiceImpl implements FileService {
 
     private static final String FILE_EXISTS_TEMPLATE = "file %s already exists";
+    private static final String FILE_NOT_FOUND_TEMPLATE = "file %s not found";
 
     private final ResourcePathUtil resourcePathUtil;
     private final StorageService storageService;
@@ -88,7 +89,7 @@ public class FileServiceImpl implements FileService {
 
     private StatObjectResponse findMetadataByPath(ResourcePath path) {
         return storageService.getObjectMetadata(path)
-                .orElseThrow(() -> new FileNotFoundException(String.format(FILE_EXISTS_TEMPLATE, path)));
+                .orElseThrow(() -> new FileNotFoundException(String.format(FILE_NOT_FOUND_TEMPLATE, path)));
     }
 
     private void checkRequestedPathForEmptyDirectoryTag(ResourcePath objectPath) {
@@ -105,16 +106,6 @@ public class FileServiceImpl implements FileService {
             throw new DownloadException(e.getMessage(), e);
         }
     }
-
-    /*private ResourcePath moveFile(MoveRequest request, ResourcePath sourcePath) {
-        StatObjectResponse metadata = findMetadataByPath(sourcePath);
-        String sourceObjectFullPath = metadata.object();
-        String targetObjectFullPath = getFullTargetPath(sourceObjectFullPath, request);
-        checkCollisions(targetObjectFullPath);
-        ResourcePath newObjectPath = copyObject(sourceObjectFullPath, request);
-        delete(sourcePath.relative());
-        return newObjectPath;
-    }*/
 
     private void checkCollisions(String... filePaths) {
         List<String> errors = new ArrayList<>();

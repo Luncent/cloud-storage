@@ -15,6 +15,9 @@
 - storageService.deleteFilesBatch не отлавливаются ошибки 
 - storageService.populateWithDirectoryObjectsAsync вернуть массив в ответе, а не параметром
 
+## Exceptions
+- DirectoryNotFound & FileNotFound
+
 ## Другое
 
 - делать проверку на наличие бакетов в минио при запуске приложения как при миграции

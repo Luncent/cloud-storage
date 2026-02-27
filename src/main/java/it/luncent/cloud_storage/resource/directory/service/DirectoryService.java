@@ -19,4 +19,6 @@ public interface DirectoryService {
     void download(OutputStream outputStream, String path);
 
     ResourceMetadataResponse move(MoveRequest request);
+
+    boolean exists(String path);
 }
