@@ -18,7 +18,7 @@ public interface ResourceService {
 
     ResourceMetadataResponse moveResource(MoveRequest request);
 
-    List<ResourceMetadataResponse> searchResource(Optional<String> query);
+    List<ResourceMetadataResponse> search(String query);
 
     //TODO temporary file max size. Why we need to set it. Check file name before upload, maybe add more symbols for correct path regexp
     List<ResourceMetadataResponse> upload(UploadRequest request);

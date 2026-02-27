@@ -17,6 +17,7 @@ import it.luncent.cloud_storage.storage.service.StorageService;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Strings;
 import org.springframework.stereotype.Service;
 
@@ -25,8 +26,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 import static it.luncent.cloud_storage.common.constants.ObjectStorageConstants.EMPTY_DIRECTORY_MARKER;
@@ -82,7 +81,7 @@ public class ResourceServiceImpl implements ResourceService {
     }
 
     @Override
-    public List<ResourceMetadataResponse> searchResource(Optional<String> query) {
+    public List<ResourceMetadataResponse> search(String query) {
         ResourcePath rootDirectory = resourcePathUtil.getResourcePathFromRelative(ROOT_DIRECTORY);
         List<Item> objects = new ArrayList<>();
         PopulationSettings populationSettings = PopulationSettings.builder()
@@ -92,17 +91,16 @@ public class ResourceServiceImpl implements ResourceService {
                 .build();
         storageService.populateWithDirectoryObjectsAsync(rootDirectory, objects, populationSettings);
 
-        return query.map(searchQuery ->
-                        objects.stream()
-                                .filter(object -> resourceNameMatchesQuery(object.objectName(), searchQuery))
-                                .map(object -> resourcePathUtil.getRelativePath(object.objectName()))
-                                .map(this::getMetadata)
-                                .toList())
-                .orElseGet(() ->
-                        objects.stream()
-                                .map(object -> resourcePathUtil.getRelativePath(object.objectName()))
-                                .map(this::getMetadata)
-                                .toList());
+        return StringUtils.isBlank(query) ?
+                objects.stream()
+                        .map(object -> resourcePathUtil.getRelativePath(object.objectName()))
+                        .map(this::getMetadata)
+                        .toList() :
+                objects.stream()
+                        .filter(object -> resourceNameMatchesQuery(object.objectName(), query))
+                        .map(object -> resourcePathUtil.getRelativePath(object.objectName()))
+                        .map(this::getMetadata)
+                        .toList();
     }
 
     @Override

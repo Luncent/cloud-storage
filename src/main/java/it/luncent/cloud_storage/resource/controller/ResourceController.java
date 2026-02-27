@@ -66,8 +66,7 @@ public class ResourceController {
 
     @GetMapping("/search")
     public ResponseEntity<List<ResourceMetadataResponse>> searchResource(@RequestParam(name = "query") String queryParam) {
-        Optional<String> query = queryParam.isBlank() ? Optional.empty() : Optional.of(queryParam);
-        return ResponseEntity.ok(resourceService.searchResource(query));
+        return ResponseEntity.ok(resourceService.search(queryParam));
     }
 
     //TODO check folders creation from filename
