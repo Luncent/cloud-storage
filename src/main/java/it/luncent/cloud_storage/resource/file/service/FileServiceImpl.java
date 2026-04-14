@@ -1,15 +1,16 @@
 package it.luncent.cloud_storage.resource.file.service;
 
 import io.minio.StatObjectResponse;
-import it.luncent.cloud_storage.resource.exception.ConflictException;
 import it.luncent.cloud_storage.resource.exception.DownloadException;
+import it.luncent.cloud_storage.resource.file.exception.FileExistsException;
 import it.luncent.cloud_storage.resource.file.exception.FileNotFoundException;
+import it.luncent.cloud_storage.resource.file.exception.ReservedNameException;
 import it.luncent.cloud_storage.resource.mapper.FileMapper;
 import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 import it.luncent.cloud_storage.resource.model.request.MoveRequest;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
 import it.luncent.cloud_storage.resource.util.ResourcePathUtil;
-import it.luncent.cloud_storage.storage.exception.ReservedNameException;
+import it.luncent.cloud_storage.storage.exception.ObjectNotFoundException;
 import it.luncent.cloud_storage.storage.service.StorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -18,20 +19,14 @@ import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Set;
 
 import static it.luncent.cloud_storage.common.constants.ObjectStorageConstants.EMPTY_DIRECTORY_MARKER;
-import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.isDirectory;
 import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.isMarker;
 
 @Service
 @RequiredArgsConstructor
 public class FileServiceImpl implements FileService {
-
-    private static final String FILE_EXISTS_TEMPLATE = "file %s already exists";
-    private static final String FILE_NOT_FOUND_TEMPLATE = "file %s not found";
 
     private final ResourcePathUtil resourcePathUtil;
     private final StorageService storageService;
@@ -48,6 +43,9 @@ public class FileServiceImpl implements FileService {
     public void delete(String path) {
         ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(path);
         checkRequestedPathForEmptyDirectoryTag(resourcePath);
+        if (!exists(path)) {
+            throw new FileNotFoundException(path);
+        }
         storageService.delete(resourcePath);
     }
 
@@ -58,10 +56,13 @@ public class FileServiceImpl implements FileService {
 
     @Override
     public void download(OutputStream outputStream, String path) {
-        //TODO add check for existence
         ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(path);
-        InputStream fileInputStream = storageService.downloadFile(resourcePath);
-        writeFileInputStreamToOutputStream(fileInputStream, outputStream);
+        try {
+            InputStream fileInputStream = storageService.downloadFile(resourcePath);
+            writeFileInputStreamToOutputStream(fileInputStream, outputStream);
+        } catch (ObjectNotFoundException ex) {
+            throw new FileNotFoundException(path);
+        }
     }
 
     @Override
@@ -70,7 +71,7 @@ public class FileServiceImpl implements FileService {
         StatObjectResponse metadata = findMetadataByPath(resourcePath);
         String sourceObjectFullPath = metadata.object();
         String targetObjectFullPath = getFullTargetPath(sourceObjectFullPath, request);
-        checkCollisions(targetObjectFullPath);
+        checkCollision(targetObjectFullPath);
         ResourcePath newObjectPath = copyObject(sourceObjectFullPath, request);
         delete(resourcePath.relative());
         return getMetadata(newObjectPath.relative());
@@ -89,12 +90,12 @@ public class FileServiceImpl implements FileService {
 
     private StatObjectResponse findMetadataByPath(ResourcePath path) {
         return storageService.getObjectMetadata(path)
-                .orElseThrow(() -> new FileNotFoundException(String.format(FILE_NOT_FOUND_TEMPLATE, path)));
+                .orElseThrow(() -> new FileNotFoundException(path.relative()));
     }
 
     private void checkRequestedPathForEmptyDirectoryTag(ResourcePath objectPath) {
         if (isMarker(objectPath.absolute())) {
-            throw new ReservedNameException(EMPTY_DIRECTORY_MARKER + " is reserved");
+            throw new ReservedNameException(EMPTY_DIRECTORY_MARKER);
         }
     }
 
@@ -107,18 +108,9 @@ public class FileServiceImpl implements FileService {
         }
     }
 
-    private void checkCollisions(String... filePaths) {
-        List<String> errors = new ArrayList<>();
-        for (String targetObjectFullPath : filePaths) {
-            if (isDirectory(targetObjectFullPath)) {
-                continue;
-            }
-            if (exists(resourcePathUtil.getRelativePath(targetObjectFullPath))) {
-                errors.add(String.format(FILE_EXISTS_TEMPLATE, resourcePathUtil.getRelativePath(targetObjectFullPath)));
-            }
-        }
-        if (!errors.isEmpty()) {
-            throw new ConflictException(String.join(", ", errors));
+    private void checkCollision(String fullPath) {
+        if (exists(resourcePathUtil.getRelativePath(fullPath))) {
+            throw new FileExistsException(resourcePathUtil.getRelativePath(fullPath));
         }
     }
 

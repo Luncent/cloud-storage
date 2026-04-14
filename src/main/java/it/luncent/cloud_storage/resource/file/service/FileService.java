@@ -19,4 +19,6 @@ public interface FileService {
     ResourceMetadataResponse move(MoveRequest request);
 
     boolean exists(String path);
+
+
 }

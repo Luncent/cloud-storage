@@ -4,6 +4,7 @@ import io.minio.Result;
 import io.minio.messages.Item;
 import it.luncent.cloud_storage.common.constants.PopulationSettings;
 import it.luncent.cloud_storage.common.util.ObjectStorageUtil;
+import it.luncent.cloud_storage.resource.directory.exception.DirectoryExistsException;
 import it.luncent.cloud_storage.resource.directory.exception.DirectoryNotFoundException;
 import it.luncent.cloud_storage.resource.directory.mapper.DirectoryMapper;
 import it.luncent.cloud_storage.resource.exception.ConflictException;
@@ -47,7 +48,7 @@ public class DirectoryServiceImpl implements DirectoryService {
     @Override
     public ResourceMetadataResponse getMetadata(String path) {
         ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(path);
-        if (exists(path)) {
+        if (fileService.exists(path)) {
             throw new DirectoryNotFoundException(String.format(DIRECTORY_NOT_FOUND_TEMPLATE, path));
         }
         return directoryMapper.mapToResponse(resourcePath.relative());
@@ -68,8 +69,8 @@ public class DirectoryServiceImpl implements DirectoryService {
 
     @Override
     public ResourceMetadataResponse createEmptyDirectory(String relativePath) {
-        if (exists(relativePath)) {
-            throw new ConflictException(String.format(DIRECTORY_NOT_FOUND_TEMPLATE, relativePath));
+        if (fileService.exists(relativePath + EMPTY_DIRECTORY_MARKER)) {
+            throw new DirectoryExistsException(relativePath);
         }
         return directoryMapper.mapToResponse(createEmptyDirectoryIgnoringConflicts(relativePath));
     }
@@ -106,13 +107,6 @@ public class DirectoryServiceImpl implements DirectoryService {
         String newDirectoryAbsolutePath = getFullTargetPath(sourceFolder.absolute(), request.from(), request.to());
         String newDirectoryRelativePath = resourcePathUtil.getRelativePath(newDirectoryAbsolutePath);
         return getMetadata(newDirectoryRelativePath);
-    }
-
-    @Override
-    public boolean exists(String relativeObjectPath) {
-        ResourcePath resourcePath = resourcePathUtil
-                .getResourcePathFromRelative(relativeObjectPath + EMPTY_DIRECTORY_MARKER);
-        return fileService.exists(resourcePath.relative());
     }
 
     private Iterable<Result<Item>> getDirectoryContent(String path) {

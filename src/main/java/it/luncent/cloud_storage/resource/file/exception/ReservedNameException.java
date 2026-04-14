@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 @AllArgsConstructor
-@Getter
-public class FileNotFoundException extends RuntimeException {
-    private final String name;
+public class ReservedNameException extends RuntimeException {
+    @Getter
+    private final String reservedName;
 }

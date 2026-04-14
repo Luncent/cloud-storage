@@ -1,11 +1,8 @@
 package it.luncent.cloud_storage.security.config;
 
 import it.luncent.cloud_storage.security.config.properties.CorsProperties;
-import it.luncent.cloud_storage.security.exception.customized_handler.CustomAccessDeniedHandler;
-import it.luncent.cloud_storage.security.exception.customized_handler.CustomAuthenticationEntryPoint;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.security.SecurityProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -24,7 +21,7 @@ import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
-import java.util.Arrays;
+import java.util.List;
 
 //TODO попробовать добавить csrf токен
 // настроить корс под фронт
@@ -34,17 +31,14 @@ import java.util.Arrays;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final CustomAccessDeniedHandler accessDeniedHandler;
-    private final CustomAuthenticationEntryPoint authenticationEntryPoint;
     private final CorsProperties corsProperties;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
                 .csrf(AbstractHttpConfigurer::disable)
-                .cors(cors-> cors.configurationSource(corsConfigurationSource()))
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(authorize -> {
-                    authorize.requestMatchers("/api/auth/sign-out").authenticated();
                     authorize.requestMatchers(
                             "/api/auth/**",
                             "/free"
@@ -52,8 +46,11 @@ public class SecurityConfig {
                     authorize.anyRequest().authenticated();
                 })
                 .exceptionHandling(exceptionHandlerConfigurer -> {
-                    exceptionHandlerConfigurer.accessDeniedHandler(accessDeniedHandler);
-                    exceptionHandlerConfigurer.authenticationEntryPoint(authenticationEntryPoint);
+                    exceptionHandlerConfigurer.accessDeniedHandler(
+                            (request, response, accessDeniedException) ->
+                                    response.sendError(HttpServletResponse.SC_FORBIDDEN, "Forbidden"));
+                    exceptionHandlerConfigurer.authenticationEntryPoint((request, response, exception) ->
+                            response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized"));
                 })
                 .build();
     }
@@ -80,8 +77,8 @@ public class SecurityConfig {
     public UrlBasedCorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(corsProperties.allowedOrigins());
-        configuration.setAllowedMethods(Arrays.asList("*"));
-        configuration.setAllowedHeaders(Arrays.asList("*"));
+        configuration.setAllowedMethods(List.of("*"));
+        configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);

@@ -22,6 +22,7 @@ import it.luncent.cloud_storage.resource.util.ResourcePathUtil;
 import it.luncent.cloud_storage.security.service.AuthService;
 import it.luncent.cloud_storage.storage.exception.ResourceNotFoundException;
 import it.luncent.cloud_storage.storage.exception.StorageException;
+import it.luncent.cloud_storage.storage.exception.converter.MinioExceptionConverter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -55,6 +56,7 @@ public class StorageServiceImpl implements StorageService {
     private final ResourcePathUtil resourcePathUtil;
     private final ForkJoinPool forkJoinPool;
     private final AuthService authService;
+    private final MinioExceptionConverter exceptionConverter;
 
     @Override
     public ObjectWriteResponse copyObject(ResourcePath from, ResourcePath to) {
@@ -104,6 +106,8 @@ public class StorageServiceImpl implements StorageService {
                             .object(filePath.absolute())
                             .build()
             );
+        } catch (ErrorResponseException ex) {
+            throw exceptionConverter.convert(ex);
         } catch (Exception ex) {
             throw new StorageException(ex.getMessage(), ex);
         }

@@ -14,9 +14,11 @@
 
 - storageService.deleteFilesBatch не отлавливаются ошибки 
 - storageService.populateWithDirectoryObjectsAsync вернуть массив в ответе, а не параметром
+- вынести зарезервированное название пустой папки в resourceService, чтобы не мешало в file/directory service-ах
 
 ## Exceptions
 - DirectoryNotFound & FileNotFound
+- убрать ResourceNotFoundException из storage
 
 ## Другое
 
@@ -25,6 +27,6 @@
 - checkRequestedPathForEmptyDirectoryTag не в StorageService делать 
 - StorageServiceImpl формирование ошибок и текстов выходит за границы полномочий этого класса
 
-## ТЗ
+## Расхождения с ТЗ
 
 - Удаление несуществующих ресурсов возвращает 200
