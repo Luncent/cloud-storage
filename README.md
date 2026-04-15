@@ -14,7 +14,8 @@
 
 - storageService.deleteFilesBatch не отлавливаются ошибки 
 - storageService.populateWithDirectoryObjectsAsync вернуть массив в ответе, а не параметром
-- вынести зарезервированное название пустой папки в resourceService, чтобы не мешало в file/directory service-ах
+- вынести зарезервированное название пустой папки в resourceService, чтобы не мешало в file/directory service-ах (пдумать)
+- сделать аннотацию кастомную для валидации строки пути
 
 ## Exceptions
 - DirectoryNotFound & FileNotFound

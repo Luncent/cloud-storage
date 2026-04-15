@@ -20,6 +20,7 @@ import it.luncent.cloud_storage.common.constants.PopulationSettings;
 import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 import it.luncent.cloud_storage.resource.util.ResourcePathUtil;
 import it.luncent.cloud_storage.security.service.AuthService;
+import it.luncent.cloud_storage.storage.exception.ObjectNotFoundException;
 import it.luncent.cloud_storage.storage.exception.ResourceNotFoundException;
 import it.luncent.cloud_storage.storage.exception.StorageException;
 import it.luncent.cloud_storage.storage.exception.converter.MinioExceptionConverter;
@@ -46,7 +47,6 @@ import static java.lang.String.format;
 @Slf4j
 public class StorageServiceImpl implements StorageService {
 
-    private static final String FOLDER_NOT_FOUND_TEMPLATE = "folder %s not found";
     private static final String OBJECT_NOT_FOUND_TEMPLATE = "object %s not found";
     private static final Integer FILE_SIZE_NOT_KNOWN = -1;
     private static final Long MB = 1024L * 1024L;
@@ -114,7 +114,7 @@ public class StorageServiceImpl implements StorageService {
     }
 
     @Override
-    public Iterable<Result<Item>> getDirectoryContent(ResourcePath directoryPath) {
+    public Iterable<Result<Item>> listObjects(ResourcePath directoryPath) {
         try {
             Iterable<Result<Item>> objects = minioClient.listObjects(
                     ListObjectsArgs.builder()
@@ -125,12 +125,9 @@ public class StorageServiceImpl implements StorageService {
             objects.iterator().next().get();
             return objects;
         } catch (ErrorResponseException ex) {
-            if (ex.response().code() == 404) {
-                throw new ResourceNotFoundException(format(FOLDER_NOT_FOUND_TEMPLATE, directoryPath.relative()), ex);
-            }
-            throw new StorageException(ex.getMessage(), ex);
+            throw exceptionConverter.convert(ex);
         } catch (NoSuchElementException ex) {
-            throw new ResourceNotFoundException(format(FOLDER_NOT_FOUND_TEMPLATE, directoryPath.relative()), ex);
+            throw new ObjectNotFoundException(directoryPath.relative());
         } catch (Exception ex) {
             throw new StorageException(ex.getMessage(), ex);
         }
@@ -158,7 +155,7 @@ public class StorageServiceImpl implements StorageService {
     @Override
     public void populateWithDirectoryObjects(ResourcePath directoryPath, List<Item> objects, PopulationSettings populationSettings) {
         try {
-            Iterable<Result<Item>> results = getDirectoryContent(directoryPath);
+            Iterable<Result<Item>> results = listObjects(directoryPath);
             for (Result<Item> result : results) {
                 Item object = result.get();
                 String objectName = object.objectName();
@@ -192,28 +189,13 @@ public class StorageServiceImpl implements StorageService {
     }
 
     @Override
-    public void uploadFile(ResourcePath filePath, InputStream inputStream, String contentType) {
-        try {
-            minioClient.putObject(
-                    PutObjectArgs.builder()
-                            .bucket(filePath.bucketName())
-                            .object(filePath.absolute())
-                            .contentType(contentType)
-                            .stream(inputStream, FILE_SIZE_NOT_KNOWN, PART_SIZE)
-                            .build()
-            );
-        } catch (Exception ex) {
-            throw new StorageException(ex.getMessage(), ex);
-        }
-    }
-
-    @Override
-    public ObjectWriteResponse uploadFile(ResourcePath filePath, InputStream inputStream) {
+    public ObjectWriteResponse uploadFile(ResourcePath filePath, InputStream inputStream, String contentType) {
         try {
             return minioClient.putObject(
                     PutObjectArgs.builder()
                             .bucket(filePath.bucketName())
                             .object(filePath.absolute())
+                            .contentType(contentType)
                             .stream(inputStream, FILE_SIZE_NOT_KNOWN, PART_SIZE)
                             .build()
             );
@@ -259,7 +241,7 @@ public class StorageServiceImpl implements StorageService {
         @Override
         protected void compute() {
             try {
-                Iterable<Result<Item>> directoryObjects = getDirectoryContent(directoryPath);
+                Iterable<Result<Item>> directoryObjects = listObjects(directoryPath);
                 List<ResourcePath> nestedDirectoriesPaths = new ArrayList<>();
                 for (Result<Item> directoryObject : directoryObjects) {
                     Item object = directoryObject.get();

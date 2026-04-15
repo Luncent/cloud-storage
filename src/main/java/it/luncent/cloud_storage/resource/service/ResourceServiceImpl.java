@@ -1,13 +1,12 @@
 package it.luncent.cloud_storage.resource.service;
 
-import io.minio.Result;
 import io.minio.messages.Item;
 import it.luncent.cloud_storage.common.constants.PopulationSettings;
 import it.luncent.cloud_storage.resource.directory.service.DirectoryService;
 import it.luncent.cloud_storage.resource.exception.ConflictException;
 import it.luncent.cloud_storage.resource.file.service.FileService;
+import it.luncent.cloud_storage.resource.model.common.Path;
 import it.luncent.cloud_storage.resource.model.common.ResourcePath;
-import it.luncent.cloud_storage.resource.model.common.UploadingFile;
 import it.luncent.cloud_storage.resource.model.request.MoveRequest;
 import it.luncent.cloud_storage.resource.model.request.UploadRequest;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
@@ -20,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Strings;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.OutputStream;
 import java.util.ArrayList;
@@ -28,7 +28,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static it.luncent.cloud_storage.common.constants.ObjectStorageConstants.EMPTY_DIRECTORY_MARKER;
 import static it.luncent.cloud_storage.common.constants.ObjectStorageConstants.ROOT_DIRECTORY;
 import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.isDirectory;
 import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.resourceIsInRootDirectory;
@@ -106,13 +105,13 @@ public class ResourceServiceImpl implements ResourceService {
     @Override
     @SneakyThrows
     public List<ResourceMetadataResponse> upload(UploadRequest request) {
-        List<String> uploadedResourcesRelativePaths = new ArrayList<>(createNestedDirectories(request));
-        String fileName = request.file().getResource().getFilename();
-        checkCollisions(resourcePathUtil.getAbsolutePathFromRelative(request.targetDirectory() + fileName));
-        uploadedResourcesRelativePaths.add(uploadFileResource(request));
-        return uploadedResourcesRelativePaths.stream()
+        ResourceMetadataResponse response = uploadFile(request);
+        List<String> uploadedResourcesRelativePaths = createNestedDirectories(request);
+        List<ResourceMetadataResponse> resourceMetadataResponses = uploadedResourcesRelativePaths.stream()
                 .map(this::getMetadata)
                 .collect(toList());
+        resourceMetadataResponses.add(response);
+        return resourceMetadataResponses;
     }
 
     @Override
@@ -123,14 +122,12 @@ public class ResourceServiceImpl implements ResourceService {
                 .collect(toList());
     }
 
+    //TODO не создаются
     private List<String> createNestedDirectories(UploadRequest request) {
         List<String> directoriesToCreate = getDirectoriesRelativePaths(request).stream()
-                .filter(directoryRelativePath -> !directoryExists(directoryRelativePath))
+                .filter(directoryRelativePath -> !directoryService.exists(directoryRelativePath))
                 .collect(toList());
-        for (String directoryToCreate : directoriesToCreate) {
-            ResourcePath directoryPath = resourcePathUtil.getResourcePathFromRelative(directoryToCreate);
-            directoryService.createEmptyDirectory(directoryPath.absolute());
-        }
+        directoriesToCreate.forEach(directoryService::createEmptyDirectory);
         return directoriesToCreate;
     }
 
@@ -173,22 +170,6 @@ public class ResourceServiceImpl implements ResourceService {
         }
     }
 
-    //TODO move to storage service
-    private boolean directoryExists(String relativeObjectPath) {
-        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(relativeObjectPath);
-        try {
-            Iterable<Result<Item>> results = storageService.getDirectoryContent(resourcePath);
-            for (Result<Item> result : results) {
-                if (result.get().objectName().endsWith(EMPTY_DIRECTORY_MARKER)) {
-                    return true;
-                }
-            }
-            return false;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
     private boolean resourceNameMatchesQuery(String resourceName, String query) {
         if (isDirectory(resourceName)) {
             int length = resourceName.length();
@@ -207,24 +188,17 @@ public class ResourceServiceImpl implements ResourceService {
         return Strings.CI.contains(fileName, query);
     }
 
-    private String uploadFileResource(UploadRequest request) {
+    private ResourceMetadataResponse uploadFile(UploadRequest request) {
         try {
-            UploadingFile uploadingFile = UploadingFile.withKnownFileSize(request);
-            return uploadFile(uploadingFile);
+            MultipartFile fileToUpload = request.file();
+            String fileName = request.file().getResource().getFilename();
+            String contentType = fileToUpload.getContentType();
+            Path path = new Path(request.targetDirectory(), fileName);
+            return fileService.upload(fileToUpload.getInputStream(), path, contentType);
         } catch (Exception e) {
             //TODO make method to handle minioException and throw corresponding one
             throw new RuntimeException(e);
         }
-    }
-
-    private String uploadFile(UploadingFile uploadingFile) {
-        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(uploadingFile.relativePath());
-        storageService.uploadFile(
-                resourcePath,
-                uploadingFile.inputStream(),
-                uploadingFile.contentType()
-        );
-        return resourcePath.relative();
     }
 
 }

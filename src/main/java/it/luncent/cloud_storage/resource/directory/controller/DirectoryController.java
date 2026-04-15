@@ -25,6 +25,7 @@ public class DirectoryController {
     public ResponseEntity<List<ResourceMetadataResponse>> getDirectoryContent(@RequestParam
                                                                               @Validated
                                                                               @IsDirectory String path) {
+        //TODO не фильтрую зарезервированные имена файлов
         return ResponseEntity.ok(directoryService.getContents(path));
     }
 

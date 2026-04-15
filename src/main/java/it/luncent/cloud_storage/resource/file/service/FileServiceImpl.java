@@ -1,11 +1,12 @@
 package it.luncent.cloud_storage.resource.file.service;
 
+import io.minio.ObjectWriteResponse;
 import io.minio.StatObjectResponse;
 import it.luncent.cloud_storage.resource.exception.DownloadException;
 import it.luncent.cloud_storage.resource.file.exception.FileExistsException;
 import it.luncent.cloud_storage.resource.file.exception.FileNotFoundException;
-import it.luncent.cloud_storage.resource.file.exception.ReservedNameException;
 import it.luncent.cloud_storage.resource.mapper.FileMapper;
+import it.luncent.cloud_storage.resource.model.common.Path;
 import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 import it.luncent.cloud_storage.resource.model.request.MoveRequest;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
@@ -20,9 +21,6 @@ import java.io.BufferedOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Set;
-
-import static it.luncent.cloud_storage.common.constants.ObjectStorageConstants.EMPTY_DIRECTORY_MARKER;
-import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.isMarker;
 
 @Service
 @RequiredArgsConstructor
@@ -42,7 +40,6 @@ public class FileServiceImpl implements FileService {
     @Override
     public void delete(String path) {
         ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(path);
-        checkRequestedPathForEmptyDirectoryTag(resourcePath);
         if (!exists(path)) {
             throw new FileNotFoundException(path);
         }
@@ -50,7 +47,7 @@ public class FileServiceImpl implements FileService {
     }
 
     @Override
-    public void deleteFilesAndMarkersBatch(String bucket, Set<String> paths) {
+    public void deleteFilesBatch(String bucket, Set<String> paths) {
         storageService.deleteFilesBatch(bucket, paths);
     }
 
@@ -67,12 +64,14 @@ public class FileServiceImpl implements FileService {
 
     @Override
     public ResourceMetadataResponse move(MoveRequest request) {
-        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(request.from());
-        StatObjectResponse metadata = findMetadataByPath(resourcePath);
-        String sourceObjectFullPath = metadata.object();
-        String targetObjectFullPath = getFullTargetPath(sourceObjectFullPath, request);
+        String sourceFileName = request.from();
+        if (!exists(sourceFileName)) {
+            throw new FileNotFoundException(sourceFileName);
+        }
+        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(sourceFileName);
+        String targetObjectFullPath = getFullTargetPath(resourcePath.absolute(), request);
         checkCollision(targetObjectFullPath);
-        ResourcePath newObjectPath = copyObject(sourceObjectFullPath, request);
+        ResourcePath newObjectPath = copyObject(resourcePath.absolute(), request);
         delete(resourcePath.relative());
         return getMetadata(newObjectPath.relative());
     }
@@ -88,15 +87,18 @@ public class FileServiceImpl implements FileService {
         }
     }
 
+    @Override
+    public ResourceMetadataResponse upload(InputStream inputStream, Path path, String contentType) {
+        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(path.getFullPath());
+        checkCollision(resourcePath.relative());
+        //TODO check if response contains size
+        ObjectWriteResponse response = storageService.uploadFile(resourcePath, inputStream, contentType);
+        return getMetadata(resourcePath.relative());
+    }
+
     private StatObjectResponse findMetadataByPath(ResourcePath path) {
         return storageService.getObjectMetadata(path)
                 .orElseThrow(() -> new FileNotFoundException(path.relative()));
-    }
-
-    private void checkRequestedPathForEmptyDirectoryTag(ResourcePath objectPath) {
-        if (isMarker(objectPath.absolute())) {
-            throw new ReservedNameException(EMPTY_DIRECTORY_MARKER);
-        }
     }
 
     private void writeFileInputStreamToOutputStream(InputStream fileInputStream, OutputStream outputStream) {

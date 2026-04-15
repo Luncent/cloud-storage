@@ -20,7 +20,7 @@ public interface StorageService {
 
     InputStream downloadFile(ResourcePath filePath);
 
-    Iterable<Result<Item>> getDirectoryContent(ResourcePath directoryPath);
+    Iterable<Result<Item>> listObjects(ResourcePath directoryPath);
 
     Optional<StatObjectResponse> getObjectMetadata(ResourcePath objectPath);
 
@@ -28,9 +28,7 @@ public interface StorageService {
 
     void populateWithDirectoryObjectsAsync(ResourcePath directoryPath, List<Item> objects, PopulationSettings populationSettings);
 
-    void uploadFile(ResourcePath filePath, InputStream inputStream, String contentType);
-
-    ObjectWriteResponse uploadFile(ResourcePath filePath, InputStream inputStream);
+    ObjectWriteResponse uploadFile(ResourcePath filePath, InputStream inputStream, String contentType);
 
     void deleteFilesBatch(String bucketName, Set<String> objectNames);
 }

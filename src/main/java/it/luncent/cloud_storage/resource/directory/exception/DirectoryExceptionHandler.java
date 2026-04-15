@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class DirectoryExceptionHandler {
 
     private static final String EXISTS_TEMPLATE = "Directory %s already exists";
+    private static final String NOT_FOUND_TEMPLATE = "Directory %s not found";
+    private static final String MOVE_CONFLICT = "files %s already exist";
 
     @ExceptionHandler(DirectoryExistsException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
@@ -21,5 +23,23 @@ public class DirectoryExceptionHandler {
         return new ErrorResponse(message);
     }
 
+    @ExceptionHandler(DirectoryNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public ErrorResponse directoryNotFoundException(DirectoryNotFoundException e) {
+        String message = String.format(NOT_FOUND_TEMPLATE, e.getName());
+        log.error(message);
+        return new ErrorResponse(message);
+    }
+
+    @ExceptionHandler(DirectoryMoveException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public ErrorResponse directoryMoveException(DirectoryMoveException e) {
+        String message = String.format(
+                MOVE_CONFLICT,
+                String.join(",\n", e.getConflictFiles())
+        );
+        log.error(message);
+        return new ErrorResponse(message);
+    }
 
 }
