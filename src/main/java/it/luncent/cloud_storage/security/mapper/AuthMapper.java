@@ -1,12 +1,10 @@
 package it.luncent.cloud_storage.security.mapper;
 
-import it.luncent.cloud_storage.security.model.UserModel;
+import it.luncent.cloud_storage.security.model.User;
 import it.luncent.cloud_storage.security.model.request.UsernamePasswordModel;
 import it.luncent.cloud_storage.security.model.response.AuthenticationResponse;
 import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
 
 @Mapper(componentModel = "spring")
 public interface AuthMapper {
@@ -15,5 +13,5 @@ public interface AuthMapper {
         return new UsernamePasswordAuthenticationToken(usernamePasswordModel.getUsername(), usernamePasswordModel.getPassword());
     }
 
-    AuthenticationResponse mapToResponse(UserModel userModel);
+    AuthenticationResponse mapToResponse(User user);
 }

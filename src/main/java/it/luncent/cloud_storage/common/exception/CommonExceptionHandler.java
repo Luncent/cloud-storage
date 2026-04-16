@@ -1,7 +1,5 @@
 package it.luncent.cloud_storage.common.exception;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSourceResolvable;
@@ -15,8 +13,6 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 
-import java.util.stream.Collectors;
-
 import static java.util.stream.Collectors.joining;
 
 @ControllerAdvice
@@ -24,7 +20,7 @@ import static java.util.stream.Collectors.joining;
 public class CommonExceptionHandler {
 
     @ExceptionHandler({ConstraintViolationException.class, MethodArgumentNotValidException.class})
-    public ResponseEntity<ErrorResponse> handleValidationException(BindingResult ex, HttpServletRequest request, HttpServletResponse response) {
+    public ResponseEntity<ErrorResponse> handleValidationException(BindingResult ex) {
         String error = ex.getAllErrors().stream()
                 .map(ObjectError::getDefaultMessage)
                 .collect(joining(", "));
@@ -34,10 +30,10 @@ public class CommonExceptionHandler {
     }
 
     @ExceptionHandler({HandlerMethodValidationException.class})
-    public ResponseEntity<ErrorResponse> handleException(HandlerMethodValidationException ex, HttpServletRequest request, HttpServletResponse response) {
+    public ResponseEntity<ErrorResponse> handleException(HandlerMethodValidationException ex) {
         log.error(ex.getMessage(), ex);
         String errorMessage = ex.getParameterValidationResults().stream()
-                .flatMap(result-> result.getResolvableErrors().stream())
+                .flatMap(result -> result.getResolvableErrors().stream())
                 .map(MessageSourceResolvable::getDefaultMessage)
                 .collect(joining(", "));
         ErrorResponse errorResponse = new ErrorResponse(errorMessage);
@@ -45,7 +41,7 @@ public class CommonExceptionHandler {
     }
 
     @ExceptionHandler({MissingServletRequestParameterException.class})
-    public ResponseEntity<ErrorResponse> handleException(MissingServletRequestParameterException ex, HttpServletRequest request, HttpServletResponse response) {
+    public ResponseEntity<ErrorResponse> handleException(MissingServletRequestParameterException ex) {
         log.error(ex.getMessage(), ex);
         ErrorResponse errorResponse = new ErrorResponse(ex.getMessage());
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);

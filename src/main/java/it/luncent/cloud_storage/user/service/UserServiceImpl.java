@@ -1,11 +1,8 @@
 package it.luncent.cloud_storage.user.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import it.luncent.cloud_storage.security.exception.UsernameExistsException;
-import it.luncent.cloud_storage.security.model.UserModel;
+import it.luncent.cloud_storage.security.model.User;
 import it.luncent.cloud_storage.security.model.request.RegistrationRequest;
-import it.luncent.cloud_storage.user.entity.User;
 import it.luncent.cloud_storage.user.mapper.UserMapper;
 import it.luncent.cloud_storage.user.model.UserResponse;
 import it.luncent.cloud_storage.user.repository.UserRepository;
@@ -30,13 +27,12 @@ public class UserServiceImpl implements UserService, UserDetailsService {
     private final UserRepository userRepository;
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
-    private final ObjectMapper objectMapper;
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        User user = findByUsername(username);
-        return new org.springframework.security.core.userdetails.User(
-                createPrincipal(user),
+        it.luncent.cloud_storage.user.entity.User user = findByUsername(username);
+        return new User(user.getId(),
+                user.getUsername(),
                 user.getPassword(),
                 new ArrayList<>()
         );
@@ -44,26 +40,17 @@ public class UserServiceImpl implements UserService, UserDetailsService {
 
     @Override
     public UserResponse create(RegistrationRequest registrationRequest) {
-        User newUser = userMapper.mapToEntity(registrationRequest);
+        it.luncent.cloud_storage.user.entity.User newUser = userMapper.mapToEntity(registrationRequest);
         newUser.setPassword(passwordEncoder.encode(newUser.getPassword()));
-        try{
-            User user = userRepository.save(newUser);
+        try {
+            it.luncent.cloud_storage.user.entity.User user = userRepository.save(newUser);
             return userMapper.mapToResponse(user);
-        }catch (DataIntegrityViolationException e){
+        } catch (DataIntegrityViolationException e) {
             throw new UsernameExistsException(format(USER_ALREADY_EXISTS_TEMPLATE, newUser.getUsername()), e);
         }
     }
 
-    private String createPrincipal(User user) {
-        UserModel userModel = new UserModel(user.getId(), user.getUsername());
-        try {
-           return objectMapper.writeValueAsString(userModel);
-        } catch (JsonProcessingException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private User findByUsername(String username) {
+    private it.luncent.cloud_storage.user.entity.User findByUsername(String username) {
         return userRepository.findByUsername(username)
                 .orElseThrow(() -> new BadCredentialsException("Bad credentials"));
     }

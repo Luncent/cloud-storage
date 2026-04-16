@@ -14,6 +14,7 @@ public class DirectoryValidator implements ConstraintValidator<IsDirectory, Stri
 
     @Override
     public boolean isValid(String value, ConstraintValidatorContext context) {
+        //TODO isBlank??
         return StringUtils.isBlank(value) || isDirectory(value);
     }
 }

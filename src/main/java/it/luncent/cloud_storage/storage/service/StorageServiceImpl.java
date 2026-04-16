@@ -16,12 +16,8 @@ import io.minio.errors.ErrorResponseException;
 import io.minio.messages.DeleteError;
 import io.minio.messages.DeleteObject;
 import io.minio.messages.Item;
-import it.luncent.cloud_storage.common.constants.PopulationSettings;
 import it.luncent.cloud_storage.resource.model.common.ResourcePath;
-import it.luncent.cloud_storage.resource.util.ResourcePathUtil;
-import it.luncent.cloud_storage.security.service.AuthService;
 import it.luncent.cloud_storage.storage.exception.ObjectNotFoundException;
-import it.luncent.cloud_storage.storage.exception.ResourceNotFoundException;
 import it.luncent.cloud_storage.storage.exception.StorageException;
 import it.luncent.cloud_storage.storage.exception.converter.MinioExceptionConverter;
 import lombok.RequiredArgsConstructor;
@@ -29,67 +25,55 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.io.InputStream;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.RecursiveAction;
 
-import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.isDirectory;
-import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.isMarker;
-import static java.lang.String.format;
+import static it.luncent.cloud_storage.common.constants.ObjectStorageConstants.DIRECTORY_SUFFIX;
 
-//TODO rethink exception handling
+//TODO exception handling
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class StorageServiceImpl implements StorageService {
 
-    private static final String OBJECT_NOT_FOUND_TEMPLATE = "object %s not found";
     private static final Integer FILE_SIZE_NOT_KNOWN = -1;
     private static final Long MB = 1024L * 1024L;
     private static final Long PART_SIZE = 10 * MB;
 
     private final MinioClient minioClient;
-    private final ResourcePathUtil resourcePathUtil;
-    private final ForkJoinPool forkJoinPool;
-    private final AuthService authService;
     private final MinioExceptionConverter exceptionConverter;
 
     @Override
-    public ObjectWriteResponse copyObject(ResourcePath from, ResourcePath to) {
+    public ObjectWriteResponse copyObject(String from, String to, String bucket) {
         try {
             return minioClient.copyObject(
                     CopyObjectArgs.builder()
                             .source(
                                     CopySource.builder()
-                                            .bucket(from.bucketName())
-                                            .object(from.absolute())
+                                            .bucket(bucket)
+                                            .object(from)
                                             .build()
                             )
-                            .bucket(to.bucketName())
-                            .object(to.absolute())
+                            .bucket(bucket)
+                            .object(to)
                             .build()
             );
         } catch (ErrorResponseException ex) {
-            if (ex.response().code() == 404) {
-                throw new ResourceNotFoundException(format(OBJECT_NOT_FOUND_TEMPLATE, from.relative()), ex);
-            }
-            throw new StorageException(ex.getMessage(), ex);
+            throw exceptionConverter.convert(ex);
         } catch (Exception ex) {
             throw new StorageException(ex.getMessage(), ex);
         }
     }
 
     @Override
-    public void delete(ResourcePath filePath) {
+    public void delete(String path, String bucket) {
         try {
             minioClient.removeObject(
                     RemoveObjectArgs.builder()
-                            .bucket(filePath.bucketName())
-                            .object(filePath.absolute())
+                            .bucket(bucket)
+                            .object(path)
                             .build()
             );
         } catch (Exception e) {
@@ -98,12 +82,12 @@ public class StorageServiceImpl implements StorageService {
     }
 
     @Override
-    public InputStream downloadFile(ResourcePath filePath) {
+    public InputStream download(String path, String bucket) {
         try {
             return minioClient.getObject(
                     GetObjectArgs.builder()
-                            .bucket(filePath.bucketName())
-                            .object(filePath.absolute())
+                            .bucket(bucket)
+                            .object(path)
                             .build()
             );
         } catch (ErrorResponseException ex) {
@@ -114,12 +98,15 @@ public class StorageServiceImpl implements StorageService {
     }
 
     @Override
-    public Iterable<Result<Item>> listObjects(ResourcePath directoryPath) {
+    public Iterable<Result<Item>> listObjects(String path, String bucket) {
+        if (!path.endsWith(DIRECTORY_SUFFIX)) {
+            throw new IllegalArgumentException("list objects only allowed on path ending with /");
+        }
         try {
             Iterable<Result<Item>> objects = minioClient.listObjects(
                     ListObjectsArgs.builder()
-                            .bucket(directoryPath.bucketName())
-                            .prefix(directoryPath.absolute())
+                            .bucket(bucket)
+                            .prefix(path)
                             .build()
             );
             objects.iterator().next().get();
@@ -127,19 +114,19 @@ public class StorageServiceImpl implements StorageService {
         } catch (ErrorResponseException ex) {
             throw exceptionConverter.convert(ex);
         } catch (NoSuchElementException ex) {
-            throw new ObjectNotFoundException(directoryPath.relative());
+            throw new ObjectNotFoundException(path);
         } catch (Exception ex) {
             throw new StorageException(ex.getMessage(), ex);
         }
     }
 
     @Override
-    public Optional<StatObjectResponse> getObjectMetadata(ResourcePath objectPath) {
+    public Optional<StatObjectResponse> getObjectMetadata(String path, String bucket) {
         try {
             return Optional.of(minioClient.statObject(
                     StatObjectArgs.builder()
-                            .bucket(objectPath.bucketName())
-                            .object(objectPath.absolute())
+                            .bucket(bucket)
+                            .object(path)
                             .build()
             ));
         } catch (ErrorResponseException e) {
@@ -153,48 +140,12 @@ public class StorageServiceImpl implements StorageService {
     }
 
     @Override
-    public void populateWithDirectoryObjects(ResourcePath directoryPath, List<Item> objects, PopulationSettings populationSettings) {
-        try {
-            Iterable<Result<Item>> results = listObjects(directoryPath);
-            for (Result<Item> result : results) {
-                Item object = result.get();
-                String objectName = object.objectName();
-                log.debug("Found object {} for dir {}", objectName, directoryPath.absolute());
-                if (isDirectory(objectName)) {
-                    if (populationSettings.includeDirectories()) {
-                        objects.add(object);
-                    }
-                    ResourcePath nestedDirectoryPath = resourcePathUtil.getResourcePathFromAbsolute(objectName);
-                    populateWithDirectoryObjects(nestedDirectoryPath, objects, populationSettings);
-                    continue;
-                }
-                if (!isSkipMarker(populationSettings.includeMarkers(), objectName)) {
-                    if (populationSettings.includeFiles()) {
-                        objects.add(object);
-                    }
-                }
-            }
-        } catch (ResourceNotFoundException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            throw new StorageException(ex.getMessage(), ex);
-        }
-    }
-
-    @Override
-    public void populateWithDirectoryObjectsAsync(ResourcePath directoryPath, List<Item> objects, PopulationSettings populationSettings) {
-        Long userId = authService.getCurrentUser().id();
-        ObjectsExtractionAction extractionAction = new ObjectsExtractionAction(directoryPath, objects, populationSettings, userId);
-        forkJoinPool.invoke(extractionAction);
-    }
-
-    @Override
-    public ObjectWriteResponse uploadFile(ResourcePath filePath, InputStream inputStream, String contentType) {
+    public ObjectWriteResponse upload(String path, String bucket, InputStream inputStream, String contentType) {
         try {
             return minioClient.putObject(
                     PutObjectArgs.builder()
-                            .bucket(filePath.bucketName())
-                            .object(filePath.absolute())
+                            .bucket(bucket)
+                            .object(path)
                             .contentType(contentType)
                             .stream(inputStream, FILE_SIZE_NOT_KNOWN, PART_SIZE)
                             .build()
@@ -220,60 +171,4 @@ public class StorageServiceImpl implements StorageService {
 
     }
 
-    private boolean isSkipMarker(boolean includeMarkers, String objectName) {
-        return !includeMarkers && isMarker(objectName);
-    }
-
-    private class ObjectsExtractionAction extends RecursiveAction {
-
-        private final ResourcePath directoryPath;
-        private final List<Item> objects;
-        private final PopulationSettings populationSettings;
-        private final Long userId;
-
-        public ObjectsExtractionAction(ResourcePath directoryPath, List<Item> objects, PopulationSettings populationSettings, Long userId) {
-            this.directoryPath = directoryPath;
-            this.objects = objects;
-            this.populationSettings = populationSettings;
-            this.userId = userId;
-        }
-
-        @Override
-        protected void compute() {
-            try {
-                Iterable<Result<Item>> directoryObjects = listObjects(directoryPath);
-                List<ResourcePath> nestedDirectoriesPaths = new ArrayList<>();
-                for (Result<Item> directoryObject : directoryObjects) {
-                    Item object = directoryObject.get();
-                    String objectName = object.objectName();
-                    if (isDirectory(objectName)) {
-                        if (populationSettings.includeDirectories()) {
-                            objects.add(object);
-                        }
-                        nestedDirectoriesPaths.add(resourcePathUtil.concurrentGetPathFromAbsolute(objectName, userId));
-                        continue;
-                    }
-                    if (isSkipMarker(populationSettings.includeMarkers(), objectName)) {
-                        continue;
-                    }
-                    if (populationSettings.includeFiles()) {
-                        log.debug("adding file thread {}", Thread.currentThread().getName());
-                        objects.add(object);
-                    }
-                }
-                startRecursiveActions(nestedDirectoriesPaths);
-            } catch (ResourceNotFoundException ex) {
-                throw ex;
-            } catch (Exception ex) {
-                throw new StorageException(ex.getMessage(), ex);
-            }
-        }
-
-        private void startRecursiveActions(List<ResourcePath> nestedDirectories) {
-            List<ObjectsExtractionAction> action = nestedDirectories.stream()
-                    .map(nestedDirectoryPath -> new ObjectsExtractionAction(nestedDirectoryPath, objects, populationSettings, userId))
-                    .toList();
-            RecursiveAction.invokeAll(action);
-        }
-    }
 }

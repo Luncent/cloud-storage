@@ -17,7 +17,7 @@ public class UserController {
 
     @GetMapping("/me")
     public ResponseEntity<UserResponse> getUser() {
-        UserResponse userResponse = new UserResponse(authService.getCurrentUser().username());
+        UserResponse userResponse = new UserResponse(authService.getCurrentUser().getUsername());
         return ResponseEntity.ok(userResponse);
     }
 

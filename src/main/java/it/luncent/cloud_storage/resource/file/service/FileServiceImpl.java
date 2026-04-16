@@ -2,22 +2,23 @@ package it.luncent.cloud_storage.resource.file.service;
 
 import io.minio.ObjectWriteResponse;
 import io.minio.StatObjectResponse;
-import it.luncent.cloud_storage.resource.exception.DownloadException;
+import it.luncent.cloud_storage.resource.file.exception.FileDownloadException;
 import it.luncent.cloud_storage.resource.file.exception.FileExistsException;
 import it.luncent.cloud_storage.resource.file.exception.FileNotFoundException;
 import it.luncent.cloud_storage.resource.mapper.FileMapper;
-import it.luncent.cloud_storage.resource.model.common.Path;
 import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 import it.luncent.cloud_storage.resource.model.request.MoveRequest;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
-import it.luncent.cloud_storage.resource.util.ResourcePathUtil;
+import it.luncent.cloud_storage.resource.utils.ResourcePathUtil;
 import it.luncent.cloud_storage.storage.exception.ObjectNotFoundException;
 import it.luncent.cloud_storage.storage.service.StorageService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.Set;
@@ -29,21 +30,22 @@ public class FileServiceImpl implements FileService {
     private final ResourcePathUtil resourcePathUtil;
     private final StorageService storageService;
     private final FileMapper fileMapper;
+    @Value("${minio.users-bucket}")
+    private String bucketName;
 
     @Override
     public ResourceMetadataResponse getMetadata(String path) {
-        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(path);
-        StatObjectResponse objectMetadata = findMetadataByPath(resourcePath);
-        return fileMapper.mapToFileResponse(resourcePath, objectMetadata);
+        StatObjectResponse objectMetadata = findMetadataByPath(path);
+        return fileMapper.mapToFileResponse(path, objectMetadata.size());
     }
 
     @Override
     public void delete(String path) {
-        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(path);
+        String absolutePath = resourcePathUtil.getAbsolutePath(path);
         if (!exists(path)) {
             throw new FileNotFoundException(path);
         }
-        storageService.delete(resourcePath);
+        storageService.delete(absolutePath, bucketName);
     }
 
     @Override
@@ -53,10 +55,20 @@ public class FileServiceImpl implements FileService {
 
     @Override
     public void download(OutputStream outputStream, String path) {
-        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(path);
+        InputStream fileInputStream = download(path);
+        try (BufferedInputStream bis = new BufferedInputStream(fileInputStream);
+             BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream)) {
+            bis.transferTo(bufferedOutputStream);
+        } catch (IOException ex) {
+            throw new FileDownloadException(path);
+        }
+    }
+
+    @Override
+    public InputStream download(String path) {
+        String absolutePath = resourcePathUtil.getAbsolutePath(path);
         try {
-            InputStream fileInputStream = storageService.downloadFile(resourcePath);
-            writeFileInputStreamToOutputStream(fileInputStream, outputStream);
+            return storageService.download(absolutePath, bucketName);
         } catch (ObjectNotFoundException ex) {
             throw new FileNotFoundException(path);
         }
@@ -69,18 +81,18 @@ public class FileServiceImpl implements FileService {
             throw new FileNotFoundException(sourceFileName);
         }
         ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(sourceFileName);
-        String targetObjectFullPath = getFullTargetPath(resourcePath.absolute(), request);
+        String targetObjectFullPath = resourcePathUtil
+                .getFullTargetPath(resourcePath.absolute(), request.from(), request.to());
         checkCollision(targetObjectFullPath);
-        ResourcePath newObjectPath = copyObject(resourcePath.absolute(), request);
+        String copiedObjectPath = copyObject(resourcePath.absolute(), request);
         delete(resourcePath.relative());
-        return getMetadata(newObjectPath.relative());
+        return getMetadata(resourcePathUtil.getRelativePath(copiedObjectPath));
     }
 
     @Override
     public boolean exists(String path) {
-        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(path);
         try {
-            findMetadataByPath(resourcePath);
+            findMetadataByPath(path);
             return true;
         } catch (FileNotFoundException e) {
             return false;
@@ -88,26 +100,17 @@ public class FileServiceImpl implements FileService {
     }
 
     @Override
-    public ResourceMetadataResponse upload(InputStream inputStream, Path path, String contentType) {
-        ResourcePath resourcePath = resourcePathUtil.getResourcePathFromRelative(path.getFullPath());
-        checkCollision(resourcePath.relative());
+    public ResourceMetadataResponse upload(InputStream inputStream, String path, String contentType) {
+        checkCollision(path);
+        String absolutePath = resourcePathUtil.getAbsolutePath(path);
         //TODO check if response contains size
-        ObjectWriteResponse response = storageService.uploadFile(resourcePath, inputStream, contentType);
-        return getMetadata(resourcePath.relative());
+        ObjectWriteResponse response = storageService.upload(absolutePath, bucketName, inputStream, contentType);
+        return getMetadata(path);
     }
 
-    private StatObjectResponse findMetadataByPath(ResourcePath path) {
-        return storageService.getObjectMetadata(path)
-                .orElseThrow(() -> new FileNotFoundException(path.relative()));
-    }
-
-    private void writeFileInputStreamToOutputStream(InputStream fileInputStream, OutputStream outputStream) {
-        try (BufferedInputStream bis = new BufferedInputStream(fileInputStream);
-             BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(outputStream)) {
-            bis.transferTo(bufferedOutputStream);
-        } catch (Exception e) {
-            throw new DownloadException(e.getMessage(), e);
-        }
+    private StatObjectResponse findMetadataByPath(String path) {
+        return storageService.getObjectMetadata(resourcePathUtil.getAbsolutePath(path), bucketName)
+                .orElseThrow(() -> new FileNotFoundException(path));
     }
 
     private void checkCollision(String fullPath) {
@@ -116,17 +119,13 @@ public class FileServiceImpl implements FileService {
         }
     }
 
-    private String getFullTargetPath(String sourceFullPath, MoveRequest request) {
-        String sourcePathPrefix = resourcePathUtil.getResourcePathFromRelative(request.from()).absolute();
-        String targetPathPrefix = resourcePathUtil.getResourcePathFromRelative(request.to()).absolute();
-        return targetPathPrefix + (sourceFullPath.substring(sourcePathPrefix.length()));
-    }
-
-    private ResourcePath copyObject(String sourceObjectFullPath, MoveRequest request) {
-        String targetFullPath = getFullTargetPath(sourceObjectFullPath, request);
-        ResourcePath toPath = resourcePathUtil.getResourcePathFromAbsolute(targetFullPath);
-        ResourcePath fromPath = resourcePathUtil.getResourcePathFromAbsolute(sourceObjectFullPath);
-        storageService.copyObject(fromPath, toPath);
-        return toPath;
+    private String copyObject(String fromPath, MoveRequest request) {
+        String toPath = resourcePathUtil.getFullTargetPath(fromPath, request.from(), request.to());
+        try {
+            ObjectWriteResponse response = storageService.copyObject(fromPath, toPath, bucketName);
+            return response.object();
+        } catch (ObjectNotFoundException e) {
+            throw new FileNotFoundException(fromPath);
+        }
     }
 }

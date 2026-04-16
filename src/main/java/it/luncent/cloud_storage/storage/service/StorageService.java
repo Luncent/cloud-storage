@@ -4,31 +4,24 @@ import io.minio.ObjectWriteResponse;
 import io.minio.Result;
 import io.minio.StatObjectResponse;
 import io.minio.messages.Item;
-import it.luncent.cloud_storage.common.constants.PopulationSettings;
-import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 
 import java.io.InputStream;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
 public interface StorageService {
 
-    ObjectWriteResponse copyObject(ResourcePath from, ResourcePath to);
+    ObjectWriteResponse copyObject(String from, String to, String bucket);
 
-    void delete(ResourcePath filePath);
+    void delete(String path, String bucket);
 
-    InputStream downloadFile(ResourcePath filePath);
+    InputStream download(String path, String bucket);
 
-    Iterable<Result<Item>> listObjects(ResourcePath directoryPath);
+    Iterable<Result<Item>> listObjects(String path, String bucket);
 
-    Optional<StatObjectResponse> getObjectMetadata(ResourcePath objectPath);
+    Optional<StatObjectResponse> getObjectMetadata(String path, String bucket);
 
-    void populateWithDirectoryObjects(ResourcePath directoryPath, List<Item> objects, PopulationSettings populationSettings);
-
-    void populateWithDirectoryObjectsAsync(ResourcePath directoryPath, List<Item> objects, PopulationSettings populationSettings);
-
-    ObjectWriteResponse uploadFile(ResourcePath filePath, InputStream inputStream, String contentType);
+    ObjectWriteResponse upload(String path, String bucket, InputStream inputStream, String contentType);
 
     void deleteFilesBatch(String bucketName, Set<String> objectNames);
 }

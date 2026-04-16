@@ -16,6 +16,7 @@ public class FileExceptionHandler {
     private static final String FILE_NOT_FOUND_TEMPLATE = "file %s not found";
     private static final String FILE_EXISTS_TEMPLATE = "file %s exists";
     private static final String RESERVED_NAME_TEMPLATE = "file name %s is reserved";
+    private static final String DOWNLOAD_ERROR_TEMPLATE = "could not download %s";
 
     @ExceptionHandler(FileNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleFileNotFound(FileNotFoundException ex) {
@@ -38,6 +39,14 @@ public class FileExceptionHandler {
     @ResponseStatus(HttpStatus.CONFLICT)
     public ErrorResponse handleFilesExistException(FileExistsException e) {
         String message = String.format(FILE_EXISTS_TEMPLATE, e.getFileName());
+        log.error(message);
+        return new ErrorResponse(message);
+    }
+
+    @ExceptionHandler(FileDownloadException.class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public ErrorResponse handleFileDownloadException(FileDownloadException e) {
+        String message = String.format(DOWNLOAD_ERROR_TEMPLATE, e.getFileName());
         log.error(message);
         return new ErrorResponse(message);
     }

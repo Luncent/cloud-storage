@@ -12,6 +12,7 @@ public class ObjectStorageUtil {
         return path.endsWith("/");
     }
 
+    //TODO бред какойто
     public static boolean resourceIsInRootDirectory(int slashIndex) {
         return slashIndex == -1;
     }

@@ -1,6 +1,5 @@
 package it.luncent.cloud_storage.resource.file.service;
 
-import it.luncent.cloud_storage.resource.model.common.Path;
 import it.luncent.cloud_storage.resource.model.request.MoveRequest;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
 
@@ -18,9 +17,11 @@ public interface FileService {
 
     void download(OutputStream outputStream, String path);
 
+    InputStream download(String path);
+
     ResourceMetadataResponse move(MoveRequest request);
 
     boolean exists(String path);
 
-    ResourceMetadataResponse upload(InputStream inputStream, Path path, String contentType);
+    ResourceMetadataResponse upload(InputStream inputStream, String path, String contentType);
 }

@@ -14,6 +14,7 @@ public class DirectoryExceptionHandler {
     private static final String EXISTS_TEMPLATE = "Directory %s already exists";
     private static final String NOT_FOUND_TEMPLATE = "Directory %s not found";
     private static final String MOVE_CONFLICT = "files %s already exist";
+    private static final String DOWNLOAD_ERROR_TEMPLATE = "could not download directory %s";
 
     @ExceptionHandler(DirectoryExistsException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
@@ -38,6 +39,14 @@ public class DirectoryExceptionHandler {
                 MOVE_CONFLICT,
                 String.join(",\n", e.getConflictFiles())
         );
+        log.error(message);
+        return new ErrorResponse(message);
+    }
+
+    @ExceptionHandler(DirectoryDownloadException.class)
+    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+    public ErrorResponse directoryDownloadException(DirectoryDownloadException e) {
+        String message = String.format(DOWNLOAD_ERROR_TEMPLATE, e.getDirectory());
         log.error(message);
         return new ErrorResponse(message);
     }

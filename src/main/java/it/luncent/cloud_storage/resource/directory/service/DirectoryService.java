@@ -1,5 +1,6 @@
 package it.luncent.cloud_storage.resource.directory.service;
 
+import io.minio.messages.Item;
 import it.luncent.cloud_storage.resource.model.request.MoveRequest;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
 
@@ -11,6 +12,8 @@ public interface DirectoryService {
     ResourceMetadataResponse getMetadata(String path);
 
     List<ResourceMetadataResponse> getContents(String path);
+
+    List<Item> getAllContents(String path);
 
     ResourceMetadataResponse createEmptyDirectory(String path);
 
