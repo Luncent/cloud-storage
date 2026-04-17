@@ -2,6 +2,7 @@ server:
   port: 8081
   tomcat:
     max-part-count: -1
+    connection-timeout: 40
 
 spring:
   application:
@@ -39,3 +40,4 @@ cors:
 logging:
   level:
     org.springframework.security.authentication.dao: DEBUG
+    it.luncent.cloud_storage: DEBUG

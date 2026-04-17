@@ -6,6 +6,7 @@ import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse
 
 import java.io.OutputStream;
 import java.util.List;
+import java.util.Set;
 
 public interface DirectoryService {
 
@@ -13,7 +14,7 @@ public interface DirectoryService {
 
     List<ResourceMetadataResponse> getContents(String path);
 
-    List<Item> getAllContents(String path);
+    Set<String> getAllContents(String path);
 
     ResourceMetadataResponse createEmptyDirectory(String path);
 

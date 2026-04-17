@@ -1,11 +1,16 @@
 package it.luncent.cloud_storage.resource.directory.exception;
 
 import it.luncent.cloud_storage.common.exception.ErrorResponse;
+import it.luncent.cloud_storage.resource.utils.PathUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.util.stream.Collectors;
 
 @RestControllerAdvice
 @Slf4j
@@ -19,17 +24,18 @@ public class DirectoryExceptionHandler {
     @ExceptionHandler(DirectoryExistsException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public ErrorResponse directoryExistsException(DirectoryExistsException e) {
-        String message = String.format(EXISTS_TEMPLATE, e.getName());
+        String message = String.format(EXISTS_TEMPLATE, PathUtils.getRelativePath(e.getName()));
         log.error(message);
         return new ErrorResponse(message);
     }
 
     @ExceptionHandler(DirectoryNotFoundException.class)
-    @ResponseStatus(HttpStatus.NOT_FOUND)
-    public ErrorResponse directoryNotFoundException(DirectoryNotFoundException e) {
-        String message = String.format(NOT_FOUND_TEMPLATE, e.getName());
+    public ResponseEntity<ErrorResponse> directoryNotFoundException(DirectoryNotFoundException e) {
+        String message = String.format(NOT_FOUND_TEMPLATE, PathUtils.getRelativePath(e.getName()));
         log.error(message);
-        return new ErrorResponse(message);
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .contentType(MediaType.APPLICATION_JSON)
+                .body(new ErrorResponse(message));
     }
 
     @ExceptionHandler(DirectoryMoveException.class)
@@ -37,7 +43,9 @@ public class DirectoryExceptionHandler {
     public ErrorResponse directoryMoveException(DirectoryMoveException e) {
         String message = String.format(
                 MOVE_CONFLICT,
-                String.join(",\n", e.getConflictFiles())
+                String.join(",\n", e.getConflictFiles().stream()
+                        .map(PathUtils::getRelativePath)
+                        .collect(Collectors.toSet()))
         );
         log.error(message);
         return new ErrorResponse(message);
@@ -46,7 +54,7 @@ public class DirectoryExceptionHandler {
     @ExceptionHandler(DirectoryDownloadException.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ErrorResponse directoryDownloadException(DirectoryDownloadException e) {
-        String message = String.format(DOWNLOAD_ERROR_TEMPLATE, e.getDirectory());
+        String message = String.format(DOWNLOAD_ERROR_TEMPLATE, PathUtils.getRelativePath(e.getDirectory()));
         log.error(message);
         return new ErrorResponse(message);
     }

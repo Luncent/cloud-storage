@@ -11,14 +11,14 @@ import it.luncent.cloud_storage.resource.directory.exception.DirectoryNotFoundEx
 import it.luncent.cloud_storage.resource.directory.mapper.DirectoryMapper;
 import it.luncent.cloud_storage.resource.file.service.FileService;
 import it.luncent.cloud_storage.resource.mapper.FileMapper;
-import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 import it.luncent.cloud_storage.resource.model.request.MoveRequest;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
-import it.luncent.cloud_storage.resource.utils.ResourcePathUtil;
+import it.luncent.cloud_storage.resource.utils.PathUtils;
 import it.luncent.cloud_storage.storage.exception.ObjectNotFoundException;
 import it.luncent.cloud_storage.storage.exception.StorageException;
 import it.luncent.cloud_storage.storage.service.StorageService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.MimeTypeUtils;
@@ -32,10 +32,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.isDirectory;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DirectoryServiceImpl implements DirectoryService {
@@ -48,7 +48,7 @@ public class DirectoryServiceImpl implements DirectoryService {
     private final FileService fileService;
     private final FileMapper fileMapper;
     private final DirectoryMapper directoryMapper;
-    private final ResourcePathUtil resourcePathUtil;
+
     @Value("${minio.users-bucket}")
     private String bucketName;
 
@@ -62,7 +62,7 @@ public class DirectoryServiceImpl implements DirectoryService {
 
     @Override
     public List<ResourceMetadataResponse> getContents(String path) {
-        Iterable<Result<Item>> directoryObjects = getDirectoryContent(resourcePathUtil.getAbsolutePath(path));
+        Iterable<Result<Item>> directoryObjects = getDirectoryContent(path);
         List<ResourceMetadataResponse> directoryContents = new ArrayList<>();
         for (Result<Item> directoryObject : directoryObjects) {
             Item item = getItem(directoryObject);
@@ -72,59 +72,55 @@ public class DirectoryServiceImpl implements DirectoryService {
     }
 
     @Override
-    public List<Item> getAllContents(String absolutePath) {
-        List<Item> objects = new ArrayList<>();
-        Iterable<Result<Item>> directoryObjects = null;
+    public Set<String> getAllContents(String path) {
+        Set<String> objectsNames = new HashSet<>();
+        Set<String> directoryObjectsNames = new HashSet<>();
         try {
-            directoryObjects = storageService.listObjects(absolutePath, bucketName);
-        } catch (ObjectNotFoundException e) {
-            throw new DirectoryNotFoundException(absolutePath);
-        }
-        for (Result<Item> result : directoryObjects) {
-            Item object = getItem(result);
-            String objectName = object.objectName();
-            if (isDirectory(objectName)) {
-                objects.addAll(getAllContents(objectName));
+            log.debug("searching for directory objects in {}", path);
+            for (Result<Item> result : storageService.listObjects(path, bucketName)) {
+                Item object = getItem(result);
+                directoryObjectsNames.add(object.objectName());
             }
-            objects.add(object);
+            log.debug("found {}", String.join("\n",directoryObjectsNames));
+        } catch (ObjectNotFoundException e) {
+            throw new DirectoryNotFoundException(path);
         }
-        return objects;
+        for (String objectName : directoryObjectsNames) {
+            if (isDirectory(objectName)) {
+                objectsNames.addAll(getAllContents(objectName));
+            }
+            objectsNames.add(objectName);
+        }
+        return objectsNames;
     }
 
     @Override
-    public ResourceMetadataResponse createEmptyDirectory(String relativePath) {
-        if (exists(relativePath)) {
-            throw new DirectoryExistsException(relativePath);
+    public ResourceMetadataResponse createEmptyDirectory(String path) {
+        if (exists(path)) {
+            throw new DirectoryExistsException(path);
         }
-        String directoryPath = relativePath + EMPTY_DIRECTORY_MARKER;
+        String directoryPath = path + EMPTY_DIRECTORY_MARKER;
         fileService.upload(new ByteArrayInputStream(new byte[FOLDER_MARKER_SIZE]), directoryPath, MimeTypeUtils.ALL_VALUE);
-        return directoryMapper.mapToResponse(relativePath);
+        return directoryMapper.mapToResponse(path);
     }
 
     @Override
     public void delete(String path) {
-        ResourcePath directoryPath = resourcePathUtil.getResourcePathFromRelative(path);
-        List<Item> objects = getAllContents(directoryPath.absolute());
-        Set<String> objectNames = objects.stream()
-                .map(Item::objectName)
-                .collect(Collectors.toSet());
-        fileService.deleteFilesBatch(directoryPath.bucketName(), objectNames);
+        Set<String> objectNames = getAllContents(path);
+        fileService.deleteFilesBatch(bucketName, objectNames);
     }
 
     //TODO фильтрануть надо будет
     @Override
     public void download(OutputStream outputStream, String path) {
         Map<String, InputStream> resourceNamesStreams = new HashMap<>();
-        String resourcePath = resourcePathUtil.getAbsolutePath(path);
-        for (Item item : getAllContents(resourcePath)) {
-            String absolutePath = item.objectName();
-            String itemRelativePath = resourcePathUtil.getRelativePath(absolutePath);
-            String objectName = itemRelativePath.substring(path.length());
+        for (String nestedObjectPath : getAllContents(path)) {
+            String objectName = nestedObjectPath.substring(path.length());
             if (isDirectory(objectName)) {
                 resourceNamesStreams.put(objectName, null);
                 continue;
             }
-            resourceNamesStreams.put(objectName, fileService.download(itemRelativePath));
+            resourceNamesStreams.put(objectName, fileService.download(nestedObjectPath));
         }
         try {
             archiveService.outputArchive(resourceNamesStreams, outputStream);
@@ -135,12 +131,15 @@ public class DirectoryServiceImpl implements DirectoryService {
 
     @Override
     public ResourceMetadataResponse move(MoveRequest request) {
-        ResourcePath sourceFolder = resourcePathUtil.getResourcePathFromRelative(request.from());
-        moveDirectory(request);
-        String newDirectoryAbsolutePath = resourcePathUtil
-                .getFullTargetPath(sourceFolder.absolute(), request.from(), request.to());
-        String newDirectoryRelativePath = resourcePathUtil.getRelativePath(newDirectoryAbsolutePath);
-        return getMetadata(newDirectoryRelativePath);
+        String from = request.from();
+        String to = request.to();
+        //TODO убрать
+        Set<String> objectsToMove = getAllContents(from);
+        objectsToMove.add(from);
+        checkCollisions(from, to, objectsToMove);
+        objectsToMove.forEach(objectToMove -> moveObject(objectToMove, from, to));
+        fileService.deleteFilesBatch(bucketName, objectsToMove);
+        return getMetadata(to);
     }
 
     @Override
@@ -170,36 +169,21 @@ public class DirectoryServiceImpl implements DirectoryService {
 
     private ResourceMetadataResponse getMetadata(Item item) {
         String path = item.objectName();
-        String relativePath = resourcePathUtil.getRelativePath(path);
         if (isDirectory(path)) {
-            return directoryMapper.mapToResponse(relativePath);
+            return directoryMapper.mapToResponse(path);
         }
-        return fileMapper.mapToFileResponse(relativePath, item.size());
+        return fileMapper.mapToFileResponse(path, item.size());
     }
 
-    private void moveDirectory(MoveRequest request) {
-        ResourcePath sourcePath = resourcePathUtil.getResourcePathFromRelative(request.from());
-        //TODO убрать
-        Set<String> sourceObjectsFullPaths = getAllContents(sourcePath.absolute()).stream()
-                .map(Item::objectName)
-                .collect(Collectors.toSet());
-        sourceObjectsFullPaths.add(sourcePath.absolute());
-        checkCollisions(request, sourceObjectsFullPaths);
-        sourceObjectsFullPaths.forEach(objectFullPath -> moveObject(objectFullPath, request));
-        delete(sourcePath.relative());
-    }
-
-    private void checkCollisions(MoveRequest request, Set<String> objects) {
-        String from = request.from();
-        String to = request.to();
+    private void checkCollisions(String fromDir, String toDir, Set<String> objects) {
         Set<String> existingFiles = new HashSet<>();
-        for (String sourceObjectFullPath : objects) {
-            if (isDirectory(sourceObjectFullPath)) {
+        for (String object : objects) {
+            if (isDirectory(object)) {
                 continue;
             }
-            String fullObjectTargetPath = resourcePathUtil.getFullTargetPath(sourceObjectFullPath, from, to);
-            if (fileService.exists(resourcePathUtil.getRelativePath(fullObjectTargetPath))) {
-                existingFiles.add(resourcePathUtil.getRelativePath(fullObjectTargetPath));
+            String objectNewPath = PathUtils.getDirectoryObjectNewPath(object, fromDir, toDir);
+            if (fileService.exists(objectNewPath)) {
+                existingFiles.add(objectNewPath);
             }
         }
         if (!existingFiles.isEmpty()) {
@@ -207,22 +191,19 @@ public class DirectoryServiceImpl implements DirectoryService {
         }
     }
 
-    private String moveObject(String sourceObjectFullPath, MoveRequest request) {
-        String targetFullPath = resourcePathUtil.getFullTargetPath(sourceObjectFullPath,
-                request.from(), request.to());
-        String targetRelative = resourcePathUtil.getRelativePath(targetFullPath);
-        if (isDirectory(targetFullPath)) {
+    private String moveObject(String path, String fromDir, String toDir) {
+        String newPath = PathUtils.getDirectoryObjectNewPath(path, fromDir, toDir);
+        if (isDirectory(newPath)) {
             try {
-                createEmptyDirectory(targetRelative);
+                createEmptyDirectory(newPath);
             } catch (DirectoryExistsException e) {
                 //ignore conflict
             }
-            return targetRelative;
+            return newPath;
         }
-        String fromRelative = resourcePathUtil.getRelativePath(sourceObjectFullPath);
-        MoveRequest fileMoveRequest = new MoveRequest(fromRelative, targetRelative);
+        MoveRequest fileMoveRequest = new MoveRequest(path, newPath);
         fileService.move(fileMoveRequest);
-        return targetRelative;
+        return newPath;
     }
 
 }

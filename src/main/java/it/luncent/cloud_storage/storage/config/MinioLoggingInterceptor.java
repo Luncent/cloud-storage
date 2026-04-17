@@ -19,21 +19,21 @@ public class MinioLoggingInterceptor implements Interceptor {
         Request request = chain.request();
 
         long startTime = System.currentTimeMillis();
-        log.info("→→→ MinIO Request: {} {}", request.method(), request.url());
+        //log.info("→→→ MinIO Request: {} {}", request.method(), request.url());
 
         try {
             Response response = chain.proceed(request);
             long duration = System.currentTimeMillis() - startTime;
 
-            log.info("←←← MinIO Response: {} {} ({}ms)",
+           /* log.info("←←← MinIO Response: {} {} ({}ms)",
                     response.code(),
                     response.message(),
                     duration);
-
+*/
             return response;
         } catch (IOException e) {
             long duration = System.currentTimeMillis() - startTime;
-            log.error("✗✗✗ MinIO Request failed after {}ms: {}", duration, e.getMessage());
+            //log.error("✗✗✗ MinIO Request failed after {}ms: {}", duration, e.getMessage());
             throw e;
         }
     }

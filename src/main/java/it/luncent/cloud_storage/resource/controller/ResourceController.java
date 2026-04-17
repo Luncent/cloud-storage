@@ -4,6 +4,7 @@ import it.luncent.cloud_storage.resource.model.request.MoveRequest;
 import it.luncent.cloud_storage.resource.model.request.UploadRequest;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
 import it.luncent.cloud_storage.resource.service.ResourceService;
+import it.luncent.cloud_storage.resource.utils.PathUtils;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
@@ -35,7 +36,7 @@ public class ResourceController {
                                                                         @NotNull(message = "request does not have path attribute")
                                                                         @Pattern(regexp = "[a-zA-Z_а-я-А-Я0-9/.]+", message = "path contains wrong symbols")
                                                                         String path) {
-        return ResponseEntity.ok(resourceService.getMetadata(path));
+        return ResponseEntity.ok(resourceService.getMetadata(PathUtils.getAbsolutePath(path)));
     }
 
     @GetMapping("/download")
@@ -43,7 +44,7 @@ public class ResourceController {
                                                                   @NotNull(message = "request does not have path attribute")
                                                                   @Pattern(regexp = "[a-zA-Z_а-я-А-Я0-9/.]+", message = "path contains wrong symbols")
                                                                   String path) {
-        StreamingResponseBody responseBody = outputStream -> resourceService.downloadResource(outputStream, path);
+        StreamingResponseBody responseBody = outputStream -> resourceService.downloadResource(outputStream, PathUtils.getAbsolutePath(path));
         return ResponseEntity.ok()
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(responseBody);
@@ -54,13 +55,15 @@ public class ResourceController {
                                                @NotNull(message = "request does not have path attribute")
                                                @Pattern(regexp = "[a-zA-Z_а-я-А-Я0-9/.]+", message = "path contains wrong symbols")
                                                String path) {
-        resourceService.deleteResource(path);
+        resourceService.deleteResource(PathUtils.getAbsolutePath(path));
         return new ResponseEntity<>(HttpStatus.NO_CONTENT);
     }
 
     @GetMapping("/move")
     public ResponseEntity<ResourceMetadataResponse> moveResource(@Validated MoveRequest moveRequest) {
-        return ResponseEntity.ok(resourceService.moveResource(moveRequest));
+        MoveRequest requestWithAbsolutePath = new MoveRequest(PathUtils.getAbsolutePath(moveRequest.from()),
+                PathUtils.getAbsolutePath(moveRequest.to()));
+        return ResponseEntity.ok(resourceService.moveResource(requestWithAbsolutePath));
     }
 
     @GetMapping("/search")
@@ -75,9 +78,11 @@ public class ResourceController {
     @PostMapping
     public ResponseEntity<List<ResourceMetadataResponse>> uploadResource(@RequestPart(name = "object") List<MultipartFile> objects,
                                                                          @RequestPart(required = false) String path) {
+        path = path == null ? "" : path;
+        String absolutePath = PathUtils.getAbsolutePath(path);
         List<UploadRequest> uploadRequests = objects.stream()
                 //TODO мб фронт пофиксить
-                .map(file -> new UploadRequest(path == null ? "" : path, file))
+                .map(file -> new UploadRequest(absolutePath, file))
                 .toList();
 
         return ResponseEntity

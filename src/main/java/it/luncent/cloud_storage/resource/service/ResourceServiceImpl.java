@@ -1,13 +1,11 @@
 package it.luncent.cloud_storage.resource.service;
 
-import io.minio.messages.Item;
 import it.luncent.cloud_storage.resource.directory.service.DirectoryService;
 import it.luncent.cloud_storage.resource.file.service.FileService;
-import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 import it.luncent.cloud_storage.resource.model.request.MoveRequest;
 import it.luncent.cloud_storage.resource.model.request.UploadRequest;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
-import it.luncent.cloud_storage.resource.utils.ResourcePathUtil;
+import it.luncent.cloud_storage.resource.utils.PathUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +19,7 @@ import java.io.OutputStream;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static it.luncent.cloud_storage.common.constants.ObjectStorageConstants.DIRECTORY_SUFFIX;
@@ -34,7 +33,6 @@ import static java.util.stream.Collectors.toList;
 @Slf4j
 public class ResourceServiceImpl implements ResourceService {
 
-    private final ResourcePathUtil resourcePathUtil;
     private final DirectoryService directoryService;
     private final FileService fileService;
 
@@ -74,17 +72,14 @@ public class ResourceServiceImpl implements ResourceService {
 
     @Override
     public List<ResourceMetadataResponse> search(String query) {
-        ResourcePath rootDirectory = resourcePathUtil.getResourcePathFromRelative(ROOT_DIRECTORY);
-        List<Item> objects = directoryService.getAllContents(rootDirectory.absolute());
-
+        Set<String> paths = directoryService
+                .getAllContents(PathUtils.getAbsolutePath(ROOT_DIRECTORY));
         return StringUtils.isBlank(query) ?
-                objects.stream()
-                        .map(object -> resourcePathUtil.getRelativePath(object.objectName()))
+                paths.stream()
                         .map(this::getMetadata)
                         .toList() :
-                objects.stream()
-                        .filter(object -> resourceNameMatchesQuery(object.objectName(), query))
-                        .map(object -> resourcePathUtil.getRelativePath(object.objectName()))
+                paths.stream()
+                        .filter(path -> resourceNameMatchesQuery(path, query))
                         .map(this::getMetadata)
                         .toList();
     }

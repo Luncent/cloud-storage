@@ -2,6 +2,7 @@ package it.luncent.cloud_storage.resource.directory.controller;
 
 import it.luncent.cloud_storage.resource.directory.service.DirectoryService;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
+import it.luncent.cloud_storage.resource.utils.PathUtils;
 import it.luncent.cloud_storage.resource.validation.IsDirectory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -26,14 +27,14 @@ public class DirectoryController {
                                                                               @Validated
                                                                               @IsDirectory String path) {
         //TODO не фильтрую зарезервированные имена файлов
-        return ResponseEntity.ok(directoryService.getContents(path));
+        return ResponseEntity.ok(directoryService.getContents(PathUtils.getAbsolutePath(path)));
     }
 
     @PostMapping
     public ResponseEntity<ResourceMetadataResponse> createEmptyDirectory(@RequestParam
                                                                          @Validated
                                                                          @IsDirectory String path) {
-        return ResponseEntity.ok(directoryService.createEmptyDirectory(path));
+        return ResponseEntity.ok(directoryService.createEmptyDirectory(PathUtils.getAbsolutePath(path)));
     }
 
 }
