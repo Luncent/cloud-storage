@@ -16,7 +16,6 @@ import io.minio.errors.ErrorResponseException;
 import io.minio.messages.DeleteError;
 import io.minio.messages.DeleteObject;
 import io.minio.messages.Item;
-import it.luncent.cloud_storage.resource.model.common.ResourcePath;
 import it.luncent.cloud_storage.storage.exception.ObjectNotFoundException;
 import it.luncent.cloud_storage.storage.exception.StorageException;
 import it.luncent.cloud_storage.storage.exception.converter.MinioExceptionConverter;

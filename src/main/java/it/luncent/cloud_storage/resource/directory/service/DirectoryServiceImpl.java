@@ -32,6 +32,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.isDirectory;
 
@@ -62,34 +63,25 @@ public class DirectoryServiceImpl implements DirectoryService {
 
     @Override
     public List<ResourceMetadataResponse> getContents(String path) {
-        Iterable<Result<Item>> directoryObjects = getDirectoryContent(path);
-        List<ResourceMetadataResponse> directoryContents = new ArrayList<>();
-        for (Result<Item> directoryObject : directoryObjects) {
-            Item item = getItem(directoryObject);
-            directoryContents.add(getMetadata(item));
-        }
-        return directoryContents;
+        List<Item> directoryObjects = getDirectoryContent(path);
+        return directoryObjects.stream()
+                .map(this::getMetadata)
+                .collect(Collectors.toList());
     }
 
     @Override
     public Set<String> getAllContents(String path) {
         Set<String> objectsNames = new HashSet<>();
-        Set<String> directoryObjectsNames = new HashSet<>();
         try {
-            log.debug("searching for directory objects in {}", path);
-            for (Result<Item> result : storageService.listObjects(path, bucketName)) {
-                Item object = getItem(result);
-                directoryObjectsNames.add(object.objectName());
+            for (Item item : getDirectoryContent(path)) {
+                String objectName = item.objectName();
+                if (item.isDir()) {
+                    objectsNames.addAll(getAllContents(objectName));
+                }
+                objectsNames.add(objectName);
             }
-            log.debug("found {}", String.join("\n",directoryObjectsNames));
         } catch (ObjectNotFoundException e) {
             throw new DirectoryNotFoundException(path);
-        }
-        for (String objectName : directoryObjectsNames) {
-            if (isDirectory(objectName)) {
-                objectsNames.addAll(getAllContents(objectName));
-            }
-            objectsNames.add(objectName);
         }
         return objectsNames;
     }
@@ -107,10 +99,9 @@ public class DirectoryServiceImpl implements DirectoryService {
     @Override
     public void delete(String path) {
         Set<String> objectNames = getAllContents(path);
-        fileService.deleteFilesBatch(bucketName, objectNames);
+        fileService.deleteFilesBatch(bucketName, getPathsWithDirectoryMarkers(objectNames));
     }
 
-    //TODO фильтрануть надо будет
     @Override
     public void download(OutputStream outputStream, String path) {
         Map<String, InputStream> resourceNamesStreams = new HashMap<>();
@@ -138,7 +129,7 @@ public class DirectoryServiceImpl implements DirectoryService {
         objectsToMove.add(from);
         checkCollisions(from, to, objectsToMove);
         objectsToMove.forEach(objectToMove -> moveObject(objectToMove, from, to));
-        fileService.deleteFilesBatch(bucketName, objectsToMove);
+        fileService.deleteFilesBatch(bucketName, getPathsWithDirectoryMarkers(objectsToMove));
         return getMetadata(to);
     }
 
@@ -147,9 +138,17 @@ public class DirectoryServiceImpl implements DirectoryService {
         return fileService.exists(path + EMPTY_DIRECTORY_MARKER);
     }
 
-    private Iterable<Result<Item>> getDirectoryContent(String path) {
+    private List<Item> getDirectoryContent(String path) {
         try {
-            return storageService.listObjects(path, bucketName);
+            List<Item> content = new ArrayList<>();
+            for (Result<Item> directoryObject : storageService.listObjects(path, bucketName)) {
+                Item item = getItem(directoryObject);
+                if (item.objectName().endsWith(EMPTY_DIRECTORY_MARKER)) {
+                    continue;
+                }
+                content.add(item);
+            }
+            return content;
         } catch (ObjectNotFoundException e) {
             boolean isRootDirectory = path.isEmpty();
             if (isRootDirectory) {
@@ -173,6 +172,17 @@ public class DirectoryServiceImpl implements DirectoryService {
             return directoryMapper.mapToResponse(path);
         }
         return fileMapper.mapToFileResponse(path, item.size());
+    }
+
+    private Set<String> getPathsWithDirectoryMarkers(Set<String> paths) {
+        Set<String> newPaths = new HashSet<>();
+        for (String path : paths) {
+            if (isDirectory(path)) {
+                newPaths.add(path + EMPTY_DIRECTORY_MARKER);
+            }
+            newPaths.add(path);
+        }
+        return newPaths;
     }
 
     private void checkCollisions(String fromDir, String toDir, Set<String> objects) {

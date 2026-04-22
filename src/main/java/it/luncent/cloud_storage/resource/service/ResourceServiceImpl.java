@@ -22,7 +22,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static it.luncent.cloud_storage.common.constants.ObjectStorageConstants.DIRECTORY_SUFFIX;
 import static it.luncent.cloud_storage.common.constants.ObjectStorageConstants.ROOT_DIRECTORY;
 import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.isDirectory;
 import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.resourceIsInRootDirectory;
@@ -151,7 +150,7 @@ public class ResourceServiceImpl implements ResourceService {
             MultipartFile fileToUpload = request.file();
             String fileName = request.file().getResource().getFilename();
             String contentType = fileToUpload.getContentType();
-            String path = String.join(DIRECTORY_SUFFIX, request.targetDirectory(), fileName);
+            String path = request.targetDirectory() + fileName;
             return fileService.upload(fileToUpload.getInputStream(), path, contentType);
         } catch (IOException e) {
             throw new RuntimeException(e);
