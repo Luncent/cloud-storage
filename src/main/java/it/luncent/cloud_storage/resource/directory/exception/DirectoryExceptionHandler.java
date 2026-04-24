@@ -24,14 +24,14 @@ public class DirectoryExceptionHandler {
     @ExceptionHandler(DirectoryExistsException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public ErrorResponse directoryExistsException(DirectoryExistsException e) {
-        String message = String.format(EXISTS_TEMPLATE, PathUtils.getRelativePath(e.getName()));
+        String message = String.format(EXISTS_TEMPLATE, PathUtils.getDirectoryName(e.getName()));
         log.error(message);
         return new ErrorResponse(message);
     }
 
     @ExceptionHandler(DirectoryNotFoundException.class)
     public ResponseEntity<ErrorResponse> directoryNotFoundException(DirectoryNotFoundException e) {
-        String message = String.format(NOT_FOUND_TEMPLATE, PathUtils.getRelativePath(e.getName()));
+        String message = String.format(NOT_FOUND_TEMPLATE, PathUtils.getDirectoryName(e.getName()));
         log.error(message);
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .contentType(MediaType.APPLICATION_JSON)
@@ -44,7 +44,7 @@ public class DirectoryExceptionHandler {
         String message = String.format(
                 MOVE_CONFLICT,
                 String.join(",\n", e.getConflictFiles().stream()
-                        .map(PathUtils::getRelativePath)
+                        .map(PathUtils::getDirectoryName)
                         .collect(Collectors.toSet()))
         );
         log.error(message);
@@ -54,7 +54,7 @@ public class DirectoryExceptionHandler {
     @ExceptionHandler(DirectoryDownloadException.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ErrorResponse directoryDownloadException(DirectoryDownloadException e) {
-        String message = String.format(DOWNLOAD_ERROR_TEMPLATE, PathUtils.getRelativePath(e.getDirectory()));
+        String message = String.format(DOWNLOAD_ERROR_TEMPLATE, PathUtils.getDirectoryName(e.getDirectory()));
         log.error(message);
         return new ErrorResponse(message);
     }

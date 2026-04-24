@@ -10,8 +10,8 @@ import java.lang.annotation.Target;
 
 @Constraint(validatedBy = MoveRequestValidator.class)
 @Retention(RetentionPolicy.RUNTIME)
-@Target(ElementType.TYPE)
-public @interface MoveRequestValidation {
+@Target(ElementType.PARAMETER)
+public @interface MoveRequest {
 
     String message() default "";
 

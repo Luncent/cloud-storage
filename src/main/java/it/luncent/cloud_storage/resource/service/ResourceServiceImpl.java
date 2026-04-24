@@ -1,13 +1,13 @@
 package it.luncent.cloud_storage.resource.service;
 
 import it.luncent.cloud_storage.resource.directory.service.DirectoryService;
+import it.luncent.cloud_storage.resource.exception.ReservedNameException;
 import it.luncent.cloud_storage.resource.file.service.FileService;
 import it.luncent.cloud_storage.resource.model.request.MoveRequest;
 import it.luncent.cloud_storage.resource.model.request.UploadRequest;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
 import it.luncent.cloud_storage.resource.utils.PathUtils;
 import lombok.RequiredArgsConstructor;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.Strings;
@@ -22,9 +22,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static it.luncent.cloud_storage.common.constants.ObjectStorageConstants.ROOT_DIRECTORY;
-import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.isDirectory;
-import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.resourceIsInRootDirectory;
+import static it.luncent.cloud_storage.resource.constants.ObjectStorageConstants.DIRECTORY_SUFFIX;
+import static it.luncent.cloud_storage.resource.constants.ObjectStorageConstants.EMPTY_DIRECTORY_MARKER;
 import static java.util.stream.Collectors.toList;
 
 @Service
@@ -36,35 +35,47 @@ public class ResourceServiceImpl implements ResourceService {
     private final FileService fileService;
 
     @Override
-    public ResourceMetadataResponse getMetadata(String relativePath) {
-        if (isDirectory(relativePath)) {
-            return directoryService.getMetadata(relativePath);
+    public ResourceMetadataResponse getMetadata(String path) {
+        if (PathUtils.isDirectory(path)) {
+            return directoryService.getMetadata(path);
         }
-        return fileService.getMetadata(relativePath);
+        if (PathUtils.isMarker(path)) {
+            throw new ReservedNameException(EMPTY_DIRECTORY_MARKER);
+        }
+        return fileService.getMetadata(path);
     }
 
     @Override
-    public void deleteResource(String relativePath) {
-        if (isDirectory(relativePath)) {
-            directoryService.delete(relativePath);
+    public void deleteResource(String path) {
+        if (PathUtils.isDirectory(path)) {
+            directoryService.delete(path);
             return;
         }
-        fileService.delete(relativePath);
+        if (PathUtils.isMarker(path)) {
+            throw new ReservedNameException(EMPTY_DIRECTORY_MARKER);
+        }
+        fileService.delete(path);
     }
 
     @Override
     public void downloadResource(OutputStream outputStream, String path) {
-        if (isDirectory(path)) {
+        if (PathUtils.isDirectory(path)) {
             directoryService.download(outputStream, path);
             return;
+        }
+        if (PathUtils.isMarker(path)) {
+            throw new ReservedNameException(EMPTY_DIRECTORY_MARKER);
         }
         fileService.download(outputStream, path);
     }
 
     @Override
     public ResourceMetadataResponse moveResource(MoveRequest request) {
-        if (isDirectory(request.from())) {
+        if (PathUtils.isDirectory(request.from())) {
             return directoryService.move(request);
+        }
+        if (PathUtils.isMarker(request.to()) || PathUtils.isMarker(request.from())) {
+            throw new ReservedNameException(EMPTY_DIRECTORY_MARKER);
         }
         return fileService.move(request);
     }
@@ -72,7 +83,7 @@ public class ResourceServiceImpl implements ResourceService {
     @Override
     public List<ResourceMetadataResponse> search(String query) {
         Set<String> paths = directoryService
-                .getAllContents(PathUtils.getAbsolutePath(ROOT_DIRECTORY));
+                .getAllContents(PathUtils.getAbsolutePath(DIRECTORY_SUFFIX));
         return StringUtils.isBlank(query) ?
                 paths.stream()
                         .map(this::getMetadata)
@@ -84,8 +95,10 @@ public class ResourceServiceImpl implements ResourceService {
     }
 
     @Override
-    @SneakyThrows
     public List<ResourceMetadataResponse> upload(UploadRequest request) {
+        if (PathUtils.isMarker(request.file().getResource().getFilename())) {
+            throw new ReservedNameException(EMPTY_DIRECTORY_MARKER);
+        }
         ResourceMetadataResponse fileUploadResponse = uploadFile(request);
         List<String> uploadedResourcesRelativePaths = createNestedDirectories(request);
         List<ResourceMetadataResponse> resourcesMetadata = uploadedResourcesRelativePaths.stream()
@@ -103,7 +116,6 @@ public class ResourceServiceImpl implements ResourceService {
                 .collect(toList());
     }
 
-    //TODO не создаются
     private List<String> createNestedDirectories(UploadRequest request) {
         List<String> directoriesToCreate = getDirectoriesRelativePaths(request).stream()
                 .filter(directoryRelativePath -> !directoryService.exists(directoryRelativePath))
@@ -112,7 +124,6 @@ public class ResourceServiceImpl implements ResourceService {
         return directoriesToCreate;
     }
 
-    //TODO сомнительный метод
     private List<String> getDirectoriesRelativePaths(UploadRequest request) {
         @SuppressWarnings("ConstantConditions")
         List<String> directoriesNames = new LinkedList<>();
@@ -128,19 +139,13 @@ public class ResourceServiceImpl implements ResourceService {
     }
 
     private boolean resourceNameMatchesQuery(String resourceName, String query) {
-        if (isDirectory(resourceName)) {
+        if (PathUtils.isDirectory(resourceName)) {
             int length = resourceName.length();
             int penultimateSlashIndex = resourceName.lastIndexOf('/', length - 2);
-            if (resourceIsInRootDirectory(penultimateSlashIndex)) {
-                return Strings.CI.contains(resourceName, query);
-            }
             String directoryName = resourceName.substring(penultimateSlashIndex + 1);
             return Strings.CI.contains(directoryName, query);
         }
         int lastSlashIndex = resourceName.lastIndexOf('/');
-        if (resourceIsInRootDirectory(lastSlashIndex)) {
-            return Strings.CI.contains(resourceName, query);
-        }
         String fileName = resourceName.substring(lastSlashIndex + 1);
         return Strings.CI.contains(fileName, query);
     }
@@ -148,7 +153,7 @@ public class ResourceServiceImpl implements ResourceService {
     private ResourceMetadataResponse uploadFile(UploadRequest request) {
         try {
             MultipartFile fileToUpload = request.file();
-            String fileName = request.file().getResource().getFilename();
+            String fileName = fileToUpload.getResource().getFilename();
             String contentType = fileToUpload.getContentType();
             String path = request.targetDirectory() + fileName;
             return fileService.upload(fileToUpload.getInputStream(), path, contentType);

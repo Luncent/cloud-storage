@@ -6,10 +6,10 @@ import it.luncent.cloud_storage.security.model.response.AuthenticationResponse;
 import it.luncent.cloud_storage.security.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,18 +23,17 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/sign-in")
-    public ResponseEntity<AuthenticationResponse> signIn(@RequestBody @Validated AuthenticationRequest authNRequest,
+    public ResponseEntity<AuthenticationResponse> signIn(@RequestBody @Valid AuthenticationRequest authNRequest,
                                                          HttpServletRequest request,
                                                          HttpServletResponse response) {
         return ResponseEntity.ok(authService.signIn(authNRequest, request, response));
     }
 
     @PostMapping("/sign-up")
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    public ResponseEntity<AuthenticationResponse> signUp(@RequestBody @Validated RegistrationRequest registrationRequest,
+    public ResponseEntity<AuthenticationResponse> signUp(@RequestBody @Valid RegistrationRequest registrationRequest,
                                                          HttpServletRequest request,
                                                          HttpServletResponse response) {
-        return new ResponseEntity(authService.signUp(registrationRequest, request, response), HttpStatus.CREATED);
+        return new ResponseEntity<>(authService.signUp(registrationRequest, request, response), HttpStatus.CREATED);
     }
 
     @PostMapping("/sign-out")

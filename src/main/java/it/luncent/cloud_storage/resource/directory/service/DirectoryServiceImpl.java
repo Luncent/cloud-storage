@@ -9,6 +9,7 @@ import it.luncent.cloud_storage.resource.directory.exception.DirectoryExistsExce
 import it.luncent.cloud_storage.resource.directory.exception.DirectoryMoveException;
 import it.luncent.cloud_storage.resource.directory.exception.DirectoryNotFoundException;
 import it.luncent.cloud_storage.resource.directory.mapper.DirectoryMapper;
+import it.luncent.cloud_storage.resource.file.exception.FileExistsException;
 import it.luncent.cloud_storage.resource.file.service.FileService;
 import it.luncent.cloud_storage.resource.mapper.FileMapper;
 import it.luncent.cloud_storage.resource.model.request.MoveRequest;
@@ -34,14 +35,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.isDirectory;
+import static it.luncent.cloud_storage.resource.constants.ObjectStorageConstants.EMPTY_DIRECTORY_MARKER;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class DirectoryServiceImpl implements DirectoryService {
 
-    public static final String EMPTY_DIRECTORY_MARKER = "empty-folder-tag";
     private static final Integer FOLDER_MARKER_SIZE = 0;
 
     private final ArchiveService archiveService;
@@ -88,18 +88,20 @@ public class DirectoryServiceImpl implements DirectoryService {
 
     @Override
     public ResourceMetadataResponse createEmptyDirectory(String path) {
-        if (exists(path)) {
+        String directoryPath = path + EMPTY_DIRECTORY_MARKER;
+        try {
+            fileService.upload(new ByteArrayInputStream(new byte[FOLDER_MARKER_SIZE]), directoryPath, MimeTypeUtils.ALL_VALUE);
+        } catch (FileExistsException e) {
             throw new DirectoryExistsException(path);
         }
-        String directoryPath = path + EMPTY_DIRECTORY_MARKER;
-        fileService.upload(new ByteArrayInputStream(new byte[FOLDER_MARKER_SIZE]), directoryPath, MimeTypeUtils.ALL_VALUE);
         return directoryMapper.mapToResponse(path);
     }
 
     @Override
     public void delete(String path) {
         Set<String> objectNames = getAllContents(path);
-        fileService.deleteFilesBatch(bucketName, getPathsWithDirectoryMarkers(objectNames));
+        objectNames.add(path);
+        delete(objectNames);
     }
 
     @Override
@@ -107,7 +109,7 @@ public class DirectoryServiceImpl implements DirectoryService {
         Map<String, InputStream> resourceNamesStreams = new HashMap<>();
         for (String nestedObjectPath : getAllContents(path)) {
             String objectName = nestedObjectPath.substring(path.length());
-            if (isDirectory(objectName)) {
+            if (PathUtils.isDirectory(objectName)) {
                 resourceNamesStreams.put(objectName, null);
                 continue;
             }
@@ -124,12 +126,11 @@ public class DirectoryServiceImpl implements DirectoryService {
     public ResourceMetadataResponse move(MoveRequest request) {
         String from = request.from();
         String to = request.to();
-        //TODO убрать
         Set<String> objectsToMove = getAllContents(from);
         objectsToMove.add(from);
         checkCollisions(from, to, objectsToMove);
         objectsToMove.forEach(objectToMove -> moveObject(objectToMove, from, to));
-        fileService.deleteFilesBatch(bucketName, getPathsWithDirectoryMarkers(objectsToMove));
+        delete(objectsToMove);
         return getMetadata(to);
     }
 
@@ -138,12 +139,16 @@ public class DirectoryServiceImpl implements DirectoryService {
         return fileService.exists(path + EMPTY_DIRECTORY_MARKER);
     }
 
+    private void delete(Set<String> paths) {
+        fileService.deleteFilesBatch(bucketName, getPathsWithDirectoryMarkers(paths));
+    }
+
     private List<Item> getDirectoryContent(String path) {
         try {
             List<Item> content = new ArrayList<>();
             for (Result<Item> directoryObject : storageService.listObjects(path, bucketName)) {
                 Item item = getItem(directoryObject);
-                if (item.objectName().endsWith(EMPTY_DIRECTORY_MARKER)) {
+                if (PathUtils.isMarker(item.objectName())) {
                     continue;
                 }
                 content.add(item);
@@ -168,7 +173,7 @@ public class DirectoryServiceImpl implements DirectoryService {
 
     private ResourceMetadataResponse getMetadata(Item item) {
         String path = item.objectName();
-        if (isDirectory(path)) {
+        if (PathUtils.isDirectory(path)) {
             return directoryMapper.mapToResponse(path);
         }
         return fileMapper.mapToFileResponse(path, item.size());
@@ -177,8 +182,9 @@ public class DirectoryServiceImpl implements DirectoryService {
     private Set<String> getPathsWithDirectoryMarkers(Set<String> paths) {
         Set<String> newPaths = new HashSet<>();
         for (String path : paths) {
-            if (isDirectory(path)) {
+            if (PathUtils.isDirectory(path)) {
                 newPaths.add(path + EMPTY_DIRECTORY_MARKER);
+                continue;
             }
             newPaths.add(path);
         }
@@ -188,10 +194,10 @@ public class DirectoryServiceImpl implements DirectoryService {
     private void checkCollisions(String fromDir, String toDir, Set<String> objects) {
         Set<String> existingFiles = new HashSet<>();
         for (String object : objects) {
-            if (isDirectory(object)) {
+            if (PathUtils.isDirectory(object)) {
                 continue;
             }
-            String objectNewPath = PathUtils.getDirectoryObjectNewPath(object, fromDir, toDir);
+            String objectNewPath = getDirectoryObjectNewPath(object, fromDir, toDir);
             if (fileService.exists(objectNewPath)) {
                 existingFiles.add(objectNewPath);
             }
@@ -202,8 +208,8 @@ public class DirectoryServiceImpl implements DirectoryService {
     }
 
     private String moveObject(String path, String fromDir, String toDir) {
-        String newPath = PathUtils.getDirectoryObjectNewPath(path, fromDir, toDir);
-        if (isDirectory(newPath)) {
+        String newPath = getDirectoryObjectNewPath(path, fromDir, toDir);
+        if (PathUtils.isDirectory(newPath)) {
             try {
                 createEmptyDirectory(newPath);
             } catch (DirectoryExistsException e) {
@@ -214,6 +220,11 @@ public class DirectoryServiceImpl implements DirectoryService {
         MoveRequest fileMoveRequest = new MoveRequest(path, newPath);
         fileService.move(fileMoveRequest);
         return newPath;
+    }
+
+
+    public String getDirectoryObjectNewPath(String oldPath, String fromDir, String toDir) {
+        return toDir + (oldPath.substring(fromDir.length()));
     }
 
 }

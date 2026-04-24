@@ -29,8 +29,6 @@ import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.Set;
 
-import static it.luncent.cloud_storage.common.constants.ObjectStorageConstants.DIRECTORY_SUFFIX;
-
 //TODO exception handling
 @Service
 @RequiredArgsConstructor
@@ -98,7 +96,7 @@ public class StorageServiceImpl implements StorageService {
 
     @Override
     public Iterable<Result<Item>> listObjects(String path, String bucket) {
-        if (!path.endsWith(DIRECTORY_SUFFIX)) {
+        if (!path.endsWith("/")) {
             throw new IllegalArgumentException("list objects only allowed on path ending with /");
         }
         try {
@@ -159,15 +157,18 @@ public class StorageServiceImpl implements StorageService {
         List<DeleteObject> deleteObjects = objectNames.stream()
                 .map(DeleteObject::new)
                 .toList();
-        Iterable<Result<DeleteError>> results = minioClient.removeObjects(
-                RemoveObjectsArgs.builder()
-                        .bucket(bucketName)
-                        .objects(deleteObjects)
-                        .build()
-        );
-        results.forEach(result -> {
-        });
-
+        try {
+            Iterable<Result<DeleteError>> errors = minioClient.removeObjects(
+                    RemoveObjectsArgs.builder()
+                            .bucket(bucketName)
+                            .objects(deleteObjects)
+                            .build()
+            );
+            for (Result<DeleteError> error : errors) {
+            }
+        } catch (Exception ex) {
+            throw new StorageException(ex.getMessage(), ex);
+        }
     }
 
 }

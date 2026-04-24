@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-import static it.luncent.cloud_storage.common.util.ObjectStorageUtil.isDirectory;
+import static it.luncent.cloud_storage.resource.utils.PathUtils.isDirectory;
 
 
 @Service

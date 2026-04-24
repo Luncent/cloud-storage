@@ -1,4 +1,4 @@
-package it.luncent.cloud_storage.resource.validation;
+package it.luncent.cloud_storage.resource.directory.validation;
 
 import jakarta.validation.Constraint;
 import jakarta.validation.Payload;
@@ -11,9 +11,9 @@ import java.lang.annotation.Target;
 @Constraint(validatedBy = DirectoryValidator.class)
 @Target(ElementType.PARAMETER)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface IsDirectory {
+public @interface DirectoryPath {
 
-    String message() default "requested path is not a directory";
+    String message() default "invalid name";
 
     Class<?>[] groups() default { };
 

@@ -1,5 +1,6 @@
 package it.luncent.cloud_storage.security.service;
 
+import it.luncent.cloud_storage.common.events.registration.RegistrationEvent;
 import it.luncent.cloud_storage.security.mapper.AuthMapper;
 import it.luncent.cloud_storage.security.model.User;
 import it.luncent.cloud_storage.security.model.request.AuthenticationRequest;
@@ -10,7 +11,7 @@ import it.luncent.cloud_storage.user.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import lombok.SneakyThrows;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -27,6 +28,7 @@ public class AuthServiceImpl implements AuthService {
     private final AuthMapper authMapper;
     private final UserService userService;
     private final SecurityContextRepository securityContextRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Override
     public AuthenticationResponse signIn(AuthenticationRequest authRequest,
@@ -40,7 +42,9 @@ public class AuthServiceImpl implements AuthService {
                                          HttpServletRequest request,
                                          HttpServletResponse response) {
         userService.create(registrationRequest);
-        return authenticate(request, response, registrationRequest);
+        AuthenticationResponse authResponse = authenticate(request, response, registrationRequest);
+        eventPublisher.publishEvent(new RegistrationEvent(this));
+        return authResponse;
     }
 
     @Override
@@ -56,7 +60,6 @@ public class AuthServiceImpl implements AuthService {
         return (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
     }
 
-    @SneakyThrows
     private AuthenticationResponse authenticate(HttpServletRequest request, HttpServletResponse response, UsernamePasswordModel user) {
         Authentication authentication = authMapper.mapToAuthentication(user);
         authentication = authenticationManager.authenticate(authentication);
