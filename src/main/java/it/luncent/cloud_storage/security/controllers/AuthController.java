@@ -1,5 +1,7 @@
 package it.luncent.cloud_storage.security.controllers;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import it.luncent.cloud_storage.security.model.request.AuthenticationRequest;
 import it.luncent.cloud_storage.security.model.request.RegistrationRequest;
 import it.luncent.cloud_storage.security.model.response.AuthenticationResponse;
@@ -18,11 +20,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
+@Tag(name = "Аутентификация")
 public class AuthController {
 
     private final AuthService authService;
 
     @PostMapping("/sign-in")
+    @Operation(summary = "вход")
     public ResponseEntity<AuthenticationResponse> signIn(@RequestBody @Valid AuthenticationRequest authNRequest,
                                                          HttpServletRequest request,
                                                          HttpServletResponse response) {
@@ -30,6 +34,7 @@ public class AuthController {
     }
 
     @PostMapping("/sign-up")
+    @Operation(summary = "регистрация")
     public ResponseEntity<AuthenticationResponse> signUp(@RequestBody @Valid RegistrationRequest registrationRequest,
                                                          HttpServletRequest request,
                                                          HttpServletResponse response) {
@@ -37,6 +42,7 @@ public class AuthController {
     }
 
     @PostMapping("/sign-out")
+    @Operation(summary = "выход из аккаунта")
     public ResponseEntity<?> signOut(HttpServletRequest request,
                                      HttpServletResponse response) {
         authService.signOut(request, response);

@@ -1,12 +1,11 @@
 server:
   port: 8081
   tomcat:
-    max-part-count: -1
     connection-timeout: 40
 
 spring:
   application:
-   name: cloud_storage
+    name: cloud_storage
   datasource:
     driver-class-name: org.postgresql.Driver
     url: jdbc:postgresql://localhost:5433/cloud-storage
@@ -23,7 +22,7 @@ spring:
   servlet:
     multipart:
       max-file-size: -1
-      max-request-size: -1
+      max-request-size: 1024MB
 
 minio:
   endpoint: "http://localhost:9000"

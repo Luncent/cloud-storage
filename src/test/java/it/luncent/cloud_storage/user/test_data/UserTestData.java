@@ -9,8 +9,8 @@ public class UserTestData {
         String userName = null;
         do {
             userName = Instancio.create(String.class);
-        }while (userName.length()<5 || userName.length()>20);
+        } while (userName.length() < 5 || userName.length() > 20);
         String password = Instancio.create(String.class);
-        return new RegistrationRequest(userName,password,password);
+        return new RegistrationRequest(userName, password, password);
     }
 }

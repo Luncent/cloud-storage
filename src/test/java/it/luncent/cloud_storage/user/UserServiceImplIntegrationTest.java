@@ -4,7 +4,6 @@ import it.luncent.cloud_storage.config.integration.IntegrationTest;
 import it.luncent.cloud_storage.security.exception.UsernameExistsException;
 import it.luncent.cloud_storage.security.model.request.RegistrationRequest;
 import it.luncent.cloud_storage.user.service.UserServiceImpl;
-import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -17,8 +16,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class UserServiceImplIntegrationTest extends IntegrationTest {
     @Autowired
     private UserServiceImpl userServiceImpl;
-    @Autowired
-    private EntityManager entityManager;
 
     @Test
     void saveNotExistingUserLeadsToUserCreation() {

@@ -1,5 +1,7 @@
 package it.luncent.cloud_storage.resource.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import it.luncent.cloud_storage.resource.directory.validation.DirectoryPath;
 import it.luncent.cloud_storage.resource.model.request.MoveRequest;
 import it.luncent.cloud_storage.resource.model.request.UploadRequest;
@@ -27,17 +29,20 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/resource")
 @RequiredArgsConstructor
+@Tag(name = "Ресурсы")
 public class ResourceController {
 
     private final ResourceService resourceService;
 
     @GetMapping
+    @Operation(summary = "получение информации о ресурсе")
     public ResponseEntity<ResourceMetadataResponse> getResourceMetadata(@RequestParam(name = "path")
                                                                         @Valid @Path String path) {
         return ResponseEntity.ok(resourceService.getMetadata(PathUtils.getAbsolutePath(path)));
     }
 
     @GetMapping("/download")
+    @Operation(summary = "скачивание ресурса")
     public ResponseEntity<StreamingResponseBody> downloadResource(@RequestParam(name = "path")
                                                                   @Valid @Path String path) {
         StreamingResponseBody responseBody = outputStream -> resourceService.downloadResource(outputStream, PathUtils.getAbsolutePath(path));
@@ -47,6 +52,7 @@ public class ResourceController {
     }
 
     @DeleteMapping
+    @Operation(summary = "удаление ресурса")
     public ResponseEntity<Void> deleteResource(@RequestParam(name = "path")
                                                @Valid @Path String path) {
         resourceService.deleteResource(PathUtils.getAbsolutePath(path));
@@ -54,6 +60,7 @@ public class ResourceController {
     }
 
     @GetMapping("/move")
+    @Operation(summary = "переименование/перемещение ресурса")
     public ResponseEntity<ResourceMetadataResponse> moveResource(@Valid
                                                                  @it.luncent.cloud_storage.resource.validation.MoveRequest
                                                                  MoveRequest moveRequest) {
@@ -63,11 +70,13 @@ public class ResourceController {
     }
 
     @GetMapping("/search")
+    @Operation(summary = "поиск ресурсов")
     public ResponseEntity<List<ResourceMetadataResponse>> searchResource(@RequestParam(name = "query") String queryParam) {
         return ResponseEntity.ok(resourceService.search(queryParam));
     }
 
-    @PostMapping
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "загрузка файлов")
     public ResponseEntity<List<ResourceMetadataResponse>> uploadResource(@RequestPart(name = "object") List<MultipartFile> objects,
                                                                          @RequestPart(required = false)
                                                                          @Valid @DirectoryPath

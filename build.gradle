@@ -37,10 +37,10 @@ dependencies {
     implementation 'org.liquibase:liquibase-core'
 
     //tika
-    implementation "org.apache.tika:tika-core:3.1.0"
+    implementation 'org.apache.tika:tika-core:3.2.2'
 
     //minio
-    implementation 'io.minio:minio:8.5.17'
+    implementation 'io.minio:minio:8.6.0'
 
     //mappers
     implementation "org.mapstruct:mapstruct:${mapstructVersion}"
@@ -50,9 +50,12 @@ dependencies {
     compileOnly "org.mapstruct:mapstruct:${mapstructVersion}"
     compileOnly 'org.projectlombok:lombok'
 
+    //documentation
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.5'
+
     //other
     runtimeOnly 'org.postgresql:postgresql'
-    implementation("org.apache.commons:commons-lang3:3.18.0")
+    implementation 'org.apache.commons:commons-lang3:3.18.0'
 
     //tests
     testImplementation 'org.springframework.boot:spring-boot-starter-test'

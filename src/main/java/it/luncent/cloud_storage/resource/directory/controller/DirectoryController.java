@@ -1,5 +1,7 @@
 package it.luncent.cloud_storage.resource.directory.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import it.luncent.cloud_storage.resource.directory.service.DirectoryService;
 import it.luncent.cloud_storage.resource.directory.validation.DirectoryPath;
 import it.luncent.cloud_storage.resource.model.response.ResourceMetadataResponse;
@@ -18,11 +20,13 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/directory")
 @RequiredArgsConstructor
+@Tag(name = "Папки")
 public class DirectoryController {
 
     private final DirectoryService directoryService;
 
     @GetMapping
+    @Operation(summary = "получение содержимого директории")
     public ResponseEntity<List<ResourceMetadataResponse>> getDirectoryContent(@RequestParam
                                                                               @Valid
                                                                               @DirectoryPath String path) {
@@ -30,6 +34,7 @@ public class DirectoryController {
     }
 
     @PostMapping
+    @Operation(summary = "создание пустой директории")
     public ResponseEntity<ResourceMetadataResponse> createEmptyDirectory(@RequestParam
                                                                          @Valid
                                                                          @DirectoryPath String path) {

@@ -9,6 +9,7 @@ import org.apache.tika.Tika;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 
 @Configuration
 @EnableConfigurationProperties(MinioProperties.class)
@@ -16,26 +17,36 @@ import org.springframework.context.annotation.Configuration;
 public class MinioConfig {
 
     @Bean
-    public MinioClient minioClient(MinioProperties minioProperties, MinioLoggingInterceptor minioLoggingInterceptor) {
+    @Profile("dev")
+    public MinioClient devMinioClient(MinioProperties minioProperties, MinioLoggingInterceptor minioLoggingInterceptor) {
         OkHttpClient httpClient = new OkHttpClient.Builder()
                 .addInterceptor(minioLoggingInterceptor)
                 .build();
+        return createMinioClient(minioProperties, httpClient);
+    }
 
-        MinioClient client = MinioClient.builder()
-                .endpoint(minioProperties.endpoint())
-                .credentials(minioProperties.username(), minioProperties.password())
-                .httpClient(httpClient)
+    @Bean
+    @Profile("!dev")
+    public MinioClient minioClient(MinioProperties minioProperties) {
+        OkHttpClient httpClient = new OkHttpClient.Builder()
                 .build();
-
-        String usersBucket = minioProperties.usersBucket();
-        createBucketIfNotExists(client, usersBucket);
-
-        return client;
+        return createMinioClient(minioProperties, httpClient);
     }
 
     @Bean
     public Tika tika() {
         return new Tika();
+    }
+
+    private MinioClient createMinioClient(MinioProperties minioProperties, OkHttpClient httpClient) {
+        MinioClient client = MinioClient.builder()
+                .endpoint(minioProperties.endpoint())
+                .credentials(minioProperties.username(), minioProperties.password())
+                .httpClient(httpClient)
+                .build();
+        String usersBucket = minioProperties.usersBucket();
+        createBucketIfNotExists(client, usersBucket);
+        return client;
     }
 
     private void createBucketIfNotExists(MinioClient client, String bucket) {

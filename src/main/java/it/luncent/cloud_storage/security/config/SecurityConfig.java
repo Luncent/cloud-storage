@@ -40,8 +40,10 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(authorize -> {
                     authorize.requestMatchers(
-                            "/api/auth/**",
-                            "/free"
+                            "/api/auth/sign-in",
+                            "/api/auth/sign-up",
+                            "/v3/api-docs/**",
+                            "/swagger-ui/**"
                     ).permitAll();
                     authorize.anyRequest().authenticated();
                 })
